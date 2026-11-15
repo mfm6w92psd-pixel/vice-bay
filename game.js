@@ -807,7 +807,42 @@ const MISSIONS = [
     intro: [['Lena', 'The cops are onto the crew. They think it\'s you.'], ['Lena', 'Lose them. All of them.']],
     start(m) { state.wanted = 3; audio.wanted(); m.target = null; setObjective('<b>Lose the cops</b>'); },
     update(m) { if (state.wanted === 0) return pass(); } },
+  // ---- v2.0 (New Bot): highway races, a long-haul courier run, and a repeatable taxi job ----
+  routeRace({ id: 'redeye', name: 'Red-Eye Run', reward: 2000, at: [-610, 150], t: 80,
+    intro: [['Lena', 'A pilot owes Rico. His plane leaves in eighty seconds.'], ['Lena', 'Take SR-112 over the top and get to the airport. Toll\'s on you.']],
+    checks: [[-700, 330], [-716, 560], [-1000, 560], [-1450, 470], [-1880, 180], [-1970, -70]] }),
+  routeRace({ id: 'sunrise', name: 'Sunrise Sprint', reward: 3000, at: [-120, 1700], t: 105,
+    intro: [['Lena', 'Big money race up I-95 to Sunrise City.'], ['Lena', 'Under the SR-70 flyover and keep your foot down.']],
+    checks: [[-143, 2050], [-143, 2500], [-143, 3000], [95, 3600], [-143, 4100], [-150, 4440]] }),
+  routeRace({ id: 'courier', name: 'Gulf Coast Courier', reward: 4000, at: [-160, 2380], t: 190,
+    intro: [['Lena', 'Sealed briefcase for a buyer in Lake Mirage.'], ['Lena', 'Take the new I-40 west. Don\'t open it.']],
+    checks: [[-540, 2500], [-1500, 2500], [-2500, 2100], [-3500, 1300], [-4000, 850], [-4480, 850]] }),
+  { id: 'taxi', name: 'Taxi Shift', reward: 0, repeat: true, at: [lines[2] - 4, lines[1] + 4],
+    intro: [['Dispatcher', 'Cab company\'s short a driver. Any car will do, we won\'t ask.'], ['Dispatcher', 'Pick up fares, drop them off fast. Bigger tip the quicker you are.']],
+    start(m) { m.fares = 0; m.earned = 0; m.off = 0; m.marker = M.makeMarker(0x3ddc84); m.marker.scale.set(2, 1.6, 2); scene.add(m.marker); m.stage = 'find'; setObjective('Get in a <b>car</b> to start your shift'); },
+    update(m, dt) {
+      if (!player.car) { m.off += dt; if (m.off > 12) return taxiEnd(m); setObjective(`Back in a <b>car</b> or the shift ends (${Math.ceil(12 - m.off)})`); return; }
+      m.off = 0;
+      if (m.stage === 'find') { const G = gridAt(player.car.x, player.car.z) || MAIN_GRID, q = gridRoadPointNear(G, player.car.x, player.car.z, 60, 220) || { x: player.car.x + 80, z: player.car.z }; m.pick = q; m.target = q; m.stage = 'pick'; m.t = 45; }
+      if (m.stage === 'pick') { setObjective(`Pick up the <b>fare</b> · ${m.fares} done · $${m.earned}`); if (dist2(m.pick) < 6 && Math.abs(player.car.speed || 0) < 6) { const d = pick(TAXI_DEST.filter(q => Math.hypot(q.x - m.pick.x, q.z - m.pick.z) > 120)); m.dest = d; m.target = d; m.stage = 'drop'; m.dist = Math.hypot(d.x - m.pick.x, d.z - m.pick.z); m.t = Math.round(m.dist / 18 + 20); m.t0 = m.t; audio.pickup(); showMsg(`🚕 "${niceLbl(d.label)}, please."`, 2.5); } }
+      else if (m.stage === 'drop') { m.t -= dt; setObjective(`Drive to <b>${niceLbl(m.dest.label)}</b> · $${m.earned} so far`); if (m.t <= 0) { showMsg('😠 The fare jumped out!', 2.5); m.stage = 'find'; return; }
+        if (dist2(m.dest) < 9) { const pay = Math.round(40 + m.dist * 0.35 + 60 * (m.t / m.t0)); player.money += pay; m.earned += pay; m.fares++; audio.pickup(); showMsg(`🚕 Fare paid +$${pay}`, 2); m.stage = 'find'; m.t = null; } }
+      m.marker.position.set(m.target.x, surfaceY(m.target.x, m.target.z, 99) + 1.5, m.target.z);
+    }, end(m) { scene.remove(m.marker); } },
 ];
+function routeRace({ id, name, reward, at, t, intro, checks }) {
+  return { id, name, reward, at, intro,
+    start(m) { m.t = t; m.k = 0; m.target = { x: checks[0][0], z: checks[0][1] }; m.marker = M.makeMarker(0xff2d6f); m.marker.scale.set(3, 2.2, 3); scene.add(m.marker); setObjective('Get in a <b>car</b>'); },
+    update(m, dt) {
+      if (!player.car) setObjective('Get in a <b>car</b>'); else { m.t -= dt; setObjective(`${name} · checkpoint <b>${m.k + 1}/${checks.length}</b>`); }
+      if (m.t <= 0) return fail('Out of time');
+      m.marker.position.set(m.target.x, surfaceY(m.target.x, m.target.z, 99) + 2, m.target.z);
+      if (player.car && dist2(m.target) < 12) { m.k++; audio.pickup(); if (m.k >= checks.length) return pass(); m.target = { x: checks[m.k][0], z: checks[m.k][1] }; m.t += 4; }
+    }, end(m) { scene.remove(m.marker); } };
+}
+function taxiEnd(m) { const n = m.fares, e = m.earned; endMission(); bigText('SHIFT OVER', '#3ddc84', `${n} fare${n === 1 ? '' : 's'} · +$${e}`); }
+const niceLbl = t => t.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+const TAXI_DEST = [POI.beach, POI.diner, POI.garage, POI.gas, POI.dock, POI.spray, { x: -450, z: 0, label: 'Vice Bay Heights' }, { x: -1970, z: -150, label: 'Airport' }, { x: -150, z: 1850, label: 'Palmetto Springs' }].filter(q => q && q.label);
 const dist2 = t => { const px = player.car ? player.car.x : player.x, pz = player.car ? player.car.z : player.z; return Math.hypot(t.x - px, t.z - pz); };
 function refreshMissionMarkers() {
   missionMarkers.forEach(m => scene.remove(m.mesh)); missionMarkers.length = 0;
@@ -821,9 +856,9 @@ function startMission(ms) {
 function endMission() { const m = state.mission; if (!m) return; m.def.end?.(m); state.mission = null; state.missionCD = 6; setObjective(''); $('timer').textContent = ''; }
 function pass() {
   const m = state.mission, ms = m.def; endMission();
-  player.money += ms.reward; if (!state.done.includes(ms.id)) state.done.push(ms.id);
+  player.money += ms.reward; if (!ms.repeat && !state.done.includes(ms.id)) state.done.push(ms.id);
   audio.missionPassed(); bigText('MISSION PASSED', '#ffd23f', `+$${ms.reward}`); refreshMissionMarkers(); saveGame(true);
-  if (state.done.length === MISSIONS.length) setTimeout(() => showMsg('All Stage 1 missions done. More in the next update!'), 3500);
+  if (state.done.length === MISSIONS.filter(q => !q.repeat).length) setTimeout(() => showMsg('All Stage 1 missions done. More in the next update!'), 3500);
 }
 function fail(why) { endMission(); bigText('MISSION FAILED', '#ff4d4d', why); }
 let cutT = 0, cutLines = null, cutDone = null;
