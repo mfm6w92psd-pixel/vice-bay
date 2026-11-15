@@ -379,6 +379,14 @@ for (const [cx, cz, r] of [[-150, 1450, 140], [...wp(-150, 2500), 300], [...wp(1
   for (let k = colliders.length - 1; k >= 0; k--) { const c = colliders[k]; if (Math.abs(c.maxX - c.minX - 12) < 0.01 && Math.abs(c.maxZ - c.minZ - 12) < 0.01 && Math.hypot((c.minX + c.maxX) / 2 - cx, (c.minZ + c.maxZ) / 2 - cz) < r) colliders.splice(k, 1); }
 }
 buildRoadSigns(scene, { highways: HWS, places: [{ name: 'Vice Bay', x: 0, z: 0 }, { name: 'Airport', x: AIRC[0], z: AIRC[1] }, ...CITIES.map(c => ({ name: c.name, x: c.center.x, z: c.center.z }))], cityRadius: 800 });
+// New Bot: SR-408 Gulf Coast Expressway, a raised 4-lane road from Coral Springs south-east to Pelican Bay, over I-20 and the countryside
+{ const ex1 = ex, ex2 = buildExpressway(scene, { name: 'SR-408 Gulf Coast Expressway', points: [[-2973, -750], [-2400, -750], [-1700, -2000], [-1700, -3650], [-1973, -3650]].map(wpt), H: 12, W: 18, up: 180, down: 180, R: 400, lampEvery: 90, addCol,
+    onRoad: (x, z) => HWS.some(h => h.nearest(x, z).dist < h.width / 2 + 3) || CITIES.some(c => c.inside(x, z)),
+    toll: { at: 3000, cost: 3 },
+    signs: [{ at: 260, lines: ['SR-408 SOUTH', 'Pelican Bay'] }, { at: -300, lines: ['SR-408 NORTH', 'Coral Springs'] }, { at: -340, lines: ['Pelican Bay', 'Next Exit'] }] });
+  const L = [ex1, ex2];
+  ex = { list: L, heightAt: (x, z, y) => Math.max(...L.map(e => e.heightAt(x, z, y))), onDeck: (x, z) => L.some(e => e.onDeck(x, z)), clamp: v => { for (const e of L) e.clamp(v); return v; },
+    nameAt: (x, z) => { for (const e of L) { const n = e.nameAt(x, z); if (n) return n; } return null; }, pts: ex1.pts, width: ex1.width, tolls: L.filter(e => e.tollPt).map(e => ({ e, t: e.tollPt })), name: ex1.name }; }
 // clear roadside scenery (billboards/barns) that lands on another leg of a highway at sharp bends
 { const onAnyHw = (x, z, pad) => HWS.some(h => h.nearest(x, z).dist < h.width / 2 + pad);
   for (let k = colliders.length - 1; k >= 0; k--) { const c = colliders[k], w = c.maxX - c.minX, d = c.maxZ - c.minZ; if (!((Math.abs(w - 1) < 0.01 && Math.abs(d - 1) < 0.01) || (Math.abs(w - 12) < 0.01 && Math.abs(d - 12) < 0.01))) continue; const cx = (c.minX + c.maxX) / 2, cz = (c.minZ + c.maxZ) / 2; if (onAnyHw(cx, cz, w > 2 ? 8 : 3)) colliders.splice(k, 1); }
@@ -846,7 +854,7 @@ function moveCar(v, dt, ai) {
     return;
   }
   if (v === player.car) { const r = stunts.carY(v, dt, surfaceY(v.x, v.z, v.y || 0)); if (r) { player.money += r.reward; showMsg(r.text, 3); } } else v.y = surfaceY(v.x, v.z, v.y || 0);
-  if (v === player.car && ex.tollPt) { const t = ex.tollPt, dd = Math.hypot(v.x - t.x, v.z - t.z); if (dd < 9 && Math.abs(v.y - t.h) < 2 && !ex.paid) { ex.paid = true; const c = Math.min(player.money, t.cost); player.money -= c; showMsg(c ? `🛣️ Toll -$${c}` : '🛣️ Toll skipped, no cash!', 2); } else if (dd > 30) ex.paid = false; }
+  if (v === player.car) for (const { e: te, t } of ex.tolls) { const dd = Math.hypot(v.x - t.x, v.z - t.z); if (dd < 9 && Math.abs(v.y - t.h) < 2 && !te.paid) { te.paid = true; const c = Math.min(player.money, t.cost); player.money -= c; showMsg(c ? `🛣️ Toll -$${c}` : '🛣️ Toll skipped, no cash!', 2); } else if (dd > 30) te.paid = false; }
   if (v.y > 0.5) { fw.clampToDeck(v); ic.clampToDeck(v); ex.clamp(v); }
   const hit = collideCircle(v.x, v.z, v.kind === 'bike' ? 1.1 : 1.7, v.y || 0);
   if (hit) {
@@ -1336,7 +1344,7 @@ function drawMinimap() {
   mm.fillStyle = '#6b6b72'; mm.fillRect(X(FW.x - FW.W / 2), Z(FW.z0), FW.W * sc, (FW.z1 - FW.z0) * sc); mm.fillRect(X(-215), Z(FW.z0 - 11), 150 * sc, 20 * sc); mm.fillRect(X(-215), Z(185), 47 * sc, 30 * sc);
   mm.fillStyle = '#4a5a8a'; mm.fillRect(X(IS.x0), Z(IS.z - IS.W / 2), (IS.x1 - IS.x0 + 28) * sc, IS.W * sc); mm.fillRect(X(-217), Z(196), 25 * sc, (IS.z - 196) * sc); for (const c of IS.cons) mm.fillRect(X(c - RW / 2), Z(180), RW * sc, (IS.z - 180) * sc);
   mm.strokeStyle = '#4a5a8a'; mm.lineCap = 'round'; for (const h of HWS) { mm.lineWidth = h.width * sc; mm.beginPath(); h.segs.forEach((g, i) => { if (!i) mm.moveTo(X(g.a.x), Z(g.a.z)); mm.lineTo(X(g.b.x), Z(g.b.z)); }); mm.stroke(); }
-  if (ex) { mm.strokeStyle = '#c49a5b'; mm.lineWidth = Math.max(2, ex.width * sc); mm.beginPath(); ex.pts.forEach((q, k) => k % 4 ? 0 : (k ? mm.lineTo(X(q.x), Z(q.z)) : mm.moveTo(X(q.x), Z(q.z)))); mm.stroke(); }
+  if (ex) for (const e of ex.list) { mm.strokeStyle = '#c49a5b'; mm.lineWidth = Math.max(2, e.width * sc); mm.beginPath(); e.pts.forEach((q, k) => k % 4 ? 0 : (k ? mm.lineTo(X(q.x), Z(q.z)) : mm.moveTo(X(q.x), Z(q.z)))); mm.stroke(); }
   if (ic) { mm.strokeStyle = '#7b8cc4'; for (const P of ic.paths) { mm.lineWidth = Math.max(2, P.width * sc); mm.beginPath(); P.points.forEach(([qx, qz], k) => k ? mm.lineTo(X(qx), Z(qz)) : mm.moveTo(X(qx), Z(qz))); mm.stroke(); } }
   mm.fillStyle = '#8a8a90'; for (const rz of [-110, 110]) mm.fillRect(X(AOX + -1970 - 230), Z(AOZ + -211 + rz - 15), 460 * sc, 30 * sc); mm.fillRect(X(AOX + -1970 - 130), Z(AOZ + -211 - 35), 260 * sc, 70 * sc); mm.fillRect(X(AOX + -1840), Z(AOZ + -51), 140 * sc, 20 * sc);
   for (const r of [...LINKS, ...downtown.streets, ...SWROADS]) mm.fillRect(X(r.minX), Z(r.minZ), (r.maxX - r.minX) * sc, (r.maxZ - r.minZ) * sc);

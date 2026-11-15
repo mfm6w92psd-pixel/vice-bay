@@ -48,13 +48,20 @@ function pathLen(fn) { let L = 0, prev = fn(0); for (let i = 1; i <= 200; i++) {
 
 
 // shared core: collision surfaces + meshes + AI lanes for a list of 3D road ribbons
-function roadSystem(root, ribbons, addCol) {
+function roadSystem(root, ribbons, addCol, opt = {}) {
+  const { pillarGap = 26, avoid = null } = opt;
+  // spatial grid of segments so long roads stay cheap to query every frame
+  const G = 48, key = (i, j) => i * 100003 + j;
+  for (const r of ribbons) { r.grid = new Map(); const m = r.width / 2 + 8;
+    for (let i = 0; i < r.pts.length - 1; i++) { const a = r.pts[i].p, b = r.pts[i + 1].p;
+      for (let gx = Math.floor((Math.min(a.x, b.x) - m) / G); gx <= Math.floor((Math.max(a.x, b.x) + m) / G); gx++)
+        for (let gz = Math.floor((Math.min(a.z, b.z) - m) / G); gz <= Math.floor((Math.max(a.z, b.z) + m) / G); gz++) { const k = key(gx, gz); let c = r.grid.get(k); if (!c) r.grid.set(k, c = []); c.push(i); } } }
   for (const r of ribbons) { r.min = new THREE.Vector2(Infinity, Infinity); r.max = new THREE.Vector2(-Infinity, -Infinity); for (const s of r.pts) { r.min.x = Math.min(r.min.x, s.p.x); r.min.y = Math.min(r.min.y, s.p.z); r.max.x = Math.max(r.max.x, s.p.x); r.max.y = Math.max(r.max.y, s.p.z); } }
   // nearest point on a ribbon centreline -> { d (lateral), y, s }
   const near = (r, x, z) => {
     const m = r.width / 2 + 1; if (x < r.min.x - m || x > r.max.x + m || z < r.min.y - m || z > r.max.y + m) return null;
-    let best = null;
-    for (let i = 0; i < r.pts.length - 1; i++) {
+    let best = null; const cell = r.grid.get(key(Math.floor(x / G), Math.floor(z / G))); if (!cell) return null;
+    for (const i of cell) {
       const a = r.pts[i].p, b = r.pts[i + 1].p, ex = b.x - a.x, ez = b.z - a.z, L2 = ex * ex + ez * ez || 1;
       const t = Math.max(0, Math.min(1, ((x - a.x) * ex + (z - a.z) * ez) / L2)), px = a.x + ex * t, pz = a.z + ez * t, d = Math.hypot(x - px, z - pz);
       if (!best || d < best.d) best = { d, y: a.y + (b.y - a.y) * t, cx: px, cz: pz };
@@ -107,7 +114,8 @@ function roadSystem(root, ribbons, addCol) {
     let acc = 0;
     r.pts.forEach((s, i) => {
       if (i) acc += s.p.distanceTo(r.pts[i - 1].p);
-      if (acc < 26 || s.p.y < 3) return; acc = 0;
+      if (acc < pillarGap || s.p.y < 3) return; acc = 0;
+      if (avoid && avoid(s.p.x, s.p.z)) return;   // keep pillars off roads we don't own (interstates below)
       const onOther = surfaces(s.p.x, s.p.z, 1).some(o => o.r !== r && o.y < s.p.y - 2);
       if (onOther) return;   // don't plant a pillar in the middle of a road underneath
       const h = s.p.y - 0.9;
@@ -178,19 +186,19 @@ export function buildInterchange(scene, { x: CX = -150, z: CZ = 1450, H = 10, ad
 // Elevated expressway along a 2D polyline: ramps up from the ground at both ends, flat at height H in between.
 //   const ex = buildExpressway(scene, { name: 'Bayshore Expressway', points: [[x,z],...], H: 9, addCol });
 //   same API as buildInterchange: heightAt, clampToDeck, inZone, roadName, paths, lanes
-export function buildExpressway(scene, { name = 'Bayshore Expressway', points, H = 9, rampLen = 150, width = 18, addCol = () => {}, lights = true, shield = 'EXPWY' } = {}) {
+export function buildExpressway(scene, { name = 'Bayshore Expressway', points, H = 9, rampLen = 150, width = 18, addCol = () => {}, lights = true, shield = 'EXPWY', pillarGap = 26, lightGap = 45, avoid = null, dirs = ['NORTH', 'SOUTH'] } = {}) {
   const root = new THREE.Group(); scene.add(root);
   const curve = new THREE.CatmullRomCurve3(points.map(([x, z]) => new THREE.Vector3(x, 0, z)), false, 'centripetal', 0.3);
   const L = curve.getLength();
   const fn = t => { const p = curve.getPointAt(t), d = t * L; p.y = H * smooth(Math.min(d, L - d) / rampLen); return p; };
   const ribbons = [{ name, kind: 'main', width, pts: samplePath(fn, L) }];
-  const sys = roadSystem(root, ribbons, addCol);
+  const sys = roadSystem(root, ribbons, addCol, { pillarGap, avoid });
   const pts = ribbons[0].pts;
-  if (lights) { let acc = 0; pts.forEach((s, i) => { if (i) acc += s.p.distanceTo(pts[i - 1].p); if (acc < 45 || s.p.y < H - 0.2) return; acc = 0;
+  if (lights) { let acc = 0; pts.forEach((s, i) => { if (i) acc += s.p.distanceTo(pts[i - 1].p); if (acc < lightGap || s.p.y < H - 0.2) return; acc = 0;
     for (const sd of [-1, 1]) { const q = s.p.clone().addScaledVector(s.right, sd * (width / 2 - 0.4)); root.add(box(0.2, 7, 0.2, 0x666666, q.x, q.y + 3.5, q.z)); const lq = s.p.clone().addScaledVector(s.right, sd * (width / 2 - 1.3)); const l = box(1.6, 0.18, 0.4, 0xffffcc, lq.x, q.y + 7, lq.z); l.material = l.material.clone(); l.material.emissive = new THREE.Color(0xffe08a); l.material.emissiveIntensity = 1.2; root.add(l); } }); }
   // entrance signs at both ends
   for (const [s, flip] of [[pts[Math.min(8, pts.length - 1)], 0], [pts[Math.max(0, pts.length - 9)], 1]]) {
-    const sg = greenSign([name.toUpperCase(), flip ? 'SOUTH' : 'NORTH'], 8, 2.6); const q = s.p.clone().addScaledVector(s.right, width / 2 + 2);
+    const sg = greenSign([name.toUpperCase(), flip ? dirs[1] : dirs[0]], 8, 2.6); const q = s.p.clone().addScaledVector(s.right, width / 2 + 2);
     sg.position.set(q.x, q.y + 3.2, q.z); sg.rotation.y = Math.atan2(s.dir.x, s.dir.z) + (flip ? 0 : Math.PI); root.add(sg); root.add(box(0.2, 3, 0.2, 0x888888, q.x, q.y + 1.5, q.z));
   }
   return { root, ...sys, deckY: H, length: L };

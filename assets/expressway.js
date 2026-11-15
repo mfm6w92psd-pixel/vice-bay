@@ -25,7 +25,7 @@ function signMesh(lines, w, h, bg = '#0b6b3a') {
   return new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: t, side: THREE.DoubleSide }));
 }
 
-export function buildExpressway(scene, { name = 'Expressway', points, H = 10, W = 18, up = 150, down = 150, R = 80, addCol = () => {}, onRoad = () => false, signs = [], toll = null } = {}) {
+export function buildExpressway(scene, { name = 'Expressway', points, H = 10, W = 18, up = 150, down = 150, R = 80, addCol = () => {}, onRoad = () => false, signs = [], toll = null, lampEvery = 45 } = {}) {
   const root = new THREE.Group(); scene.add(root);
   const S = filletPath(points, R); let tot = 0; const dist = [0];
   for (let i = 1; i < S.length; i++) { tot += S[i].distanceTo(S[i - 1]); dist.push(tot); }
@@ -53,7 +53,7 @@ export function buildExpressway(scene, { name = 'Expressway', points, H = 10, W 
     }
     sinceP += hl; sinceL += hl;
     if (sinceP > 24 && mh > 3) { sinceP = 0; for (const sd of [-1, 1]) { const px = mx + nx * sd * (W / 2 - 3), pz = mz + nz * sd * (W / 2 - 3); if (!onRoad(px, pz)) pillars.push([px, pz, mh - 0.8]); } }
-    if (sinceL > 45) { sinceL = 0; lamps.push([mx, mz, mh]); }
+    if (sinceL > lampEvery) { sinceL = 0; lamps.push([mx, mz, mh]); }
   }
   deck.castShadow = deck.receiveShadow = true; rail.castShadow = true;
   [deck, rail, white, yellow].forEach(m => { m.instanceMatrix.needsUpdate = true; m.frustumCulled = false; root.add(m); });
@@ -74,10 +74,14 @@ export function buildExpressway(scene, { name = 'Expressway', points, H = 10, W 
   for (const s of signs) gantry(s.at < 0 ? tot + s.at : s.at, s.lines);
   let tollPt = null; if (toll) { const p = at(toll.at < 0 ? tot + toll.at : toll.at); tollPt = { x: p.x, z: p.z, h: p.h, cost: toll.cost || 2 }; gantry(p.d, ['TOLL $' + tollPt.cost, 'SunPass Only'], '#6b2f0b'); }
   let minX = 1e9, maxX = -1e9, minZ = 1e9, maxZ = -1e9; for (const p of pts) { minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x); minZ = Math.min(minZ, p.z); maxZ = Math.max(maxZ, p.z); }
+  // spatial hash (64 m cells) so long expressways stay cheap to query
+  const CELL = 64, grid = new Map(), key = (i, j) => i * 100003 + j;
+  pts.forEach((p, i) => { const k = key(Math.floor(p.x / CELL), Math.floor(p.z / CELL)); if (!grid.has(k)) grid.set(k, []); grid.get(k).push(i); });
   function nearest(x, z) {
     if (x < minX - W || x > maxX + W || z < minZ - W || z > maxZ + W) return null;
-    let bi = 0, bd = 1e18; for (let i = 0; i < pts.length; i++) { const d = (pts[i].x - x) ** 2 + (pts[i].z - z) ** 2; if (d < bd) { bd = d; bi = i; } }
-    return { p: pts[bi], d: Math.sqrt(bd) };
+    const ci = Math.floor(x / CELL), cj = Math.floor(z / CELL); let bi = -1, bd = 1e18;
+    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) { const l = grid.get(key(ci + a, cj + b)); if (l) for (const i of l) { const d = (pts[i].x - x) ** 2 + (pts[i].z - z) ** 2; if (d < bd) { bd = d; bi = i; } } }
+    return bi < 0 ? null : { p: pts[bi], d: Math.sqrt(bd) };
   }
   const heightAt = (x, z, y = 0) => { const q = nearest(x, z); return q && q.d < W / 2 && q.p.h > 0.05 && y + 1.6 >= q.p.h ? q.p.h : 0; };
   const onDeck = (x, z) => { const q = nearest(x, z); return !!q && q.d < W / 2; };

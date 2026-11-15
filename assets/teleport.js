@@ -37,7 +37,9 @@ const fmt = d => d >= 1000 ? (d / 1000).toFixed(1) + ' km' : Math.round(d) + ' m
 
 // The button hides itself whenever a menu screen (.screen without .hidden, e.g. title/pause/settings) is showing; override with canShow().
 export function buildTeleport({ places = [], teleport, getOwned = () => [], getPos, showMsg = () => {}, onOpen = () => {}, onClose = () => {}, button = true, buttonStyle = '', canShow }) {
-  const allowed = () => canShow ? canShow() : ![...document.querySelectorAll('.screen')].some(e => e.getClientRects().length && getComputedStyle(e).display !== 'none' && getComputedStyle(e).visibility !== 'hidden');
+  const shown = e => e && e.getClientRects().length && getComputedStyle(e).display !== 'none' && getComputedStyle(e).visibility !== 'hidden';
+  // the rotate-phone screen always wins, even when the game passes its own canShow()
+  const allowed = () => !shown(document.getElementById('rotate')) && (canShow ? canShow() : ![...document.querySelectorAll('.screen')].some(shown));
   if (!document.getElementById('tpCSS')) { const s = document.createElement('style'); s.id = 'tpCSS'; s.textContent = css; document.head.appendChild(s); }
   let o = null, btn = null;
   const section = (title, list, empty) => {
