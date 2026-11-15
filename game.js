@@ -323,9 +323,17 @@ HWS.push(
   buildInterstate(scene, { number: 8, name: 'Southern', points: [[-227, -4700], [-1500, -4700], [-3000, -4300], [-4700, -2927]], addCol, startMile: 120 }),
   buildInterstate(scene, { number: 26, name: 'Lakeshore', points: [[-477, 4700], [-1800, 4700], [-3200, 3800], [-4700, 2600], [-4700, 1177]], addCol, startMile: 140 }),
   buildInterstate(scene, { number: 14, name: 'Glades', points: [[-122, -1900], [-1000, -1900], [-1970, -1100], [-1970, -400]], addCol, startMile: 160 }),
-  buildInterstate(scene, { number: 6, name: 'Palm Harbor', points: [[-5027, 850], [-5800, 850], [-6200, 650], [-6673, 650]], addCol, startMile: 180 }),
+  buildInterstate(scene, { number: 6, name: 'Palm Harbor', points: [[-5027, 850], [-5800, 850], [-6200, 690], [-6673, 690]], addCol, startMile: 180 }),
+  buildInterstate(scene, { number: 2, name: 'Harbor Ridge', points: [[-7000, 523], [-7000, -500], [-7000, -1500], [-6000, -2600], [-5027, -2600]], addCol, scenery: false, startMile: 200 }),
+  Object.assign(buildInterstate(scene, { number: 1, name: 'Frontier Highway', points: [[-7327, 850], [-7600, -1000], [-7300, -4000], [-5500, -5200], [-1000, -5300], [100, -5027]], addCol, startMile: 260 }), { us: true }),
   buildInterstate(scene, { number: 275, name: 'Pine Ridge', points: [[-4700, 523], [-4700, -500], [-4400, -1300], [-4700, -2000], [-4700, -2273]], addCol }),
+  Object.assign(buildInterstate(scene, { number: 66, name: 'Mother Road', points: [[-7000, 1177], [-7000, 3000], [-6000, 5200], [-3000, 5600], [-1000, 5500], [-150, 5027]], addCol, startMile: 220 }), { us: true }),
 );
+// keep farm barns out from under flyovers (one used to block the SR-70 underpass on I-95)
+for (const [cx, cz, r] of [[-150, 2500, 140], [100, -2550, 140], [-4700, 0, 140]]) {
+  for (const h of HWS) for (const c of [...h.root.children]) if (c.isMesh && c.geometry?.type === 'BoxGeometry' && c.material?.color?.getHex() === 0xa4161a && Math.hypot(c.position.x - cx, c.position.z - cz) < r) h.root.remove(c);
+  for (let k = colliders.length - 1; k >= 0; k--) { const c = colliders[k]; if (Math.abs(c.maxX - c.minX - 12) < 0.01 && Math.abs(c.maxZ - c.minZ - 12) < 0.01 && Math.hypot((c.minX + c.maxX) / 2 - cx, (c.minZ + c.maxZ) / 2 - cz) < r) colliders.splice(k, 1); }
+}
 const inHw = (x, z) => CITIES.some(c => c.inside(x, z)) || inRect(SWAMP, x, z) || inRect(DT, x, z) || LINKS.some(r => inRect(r, x, z)) || inRect(AIR, x, z) || inRect(TOWN, x, z) || HWS.some(h => h.nearest(x, z).dist < h.width / 2 + 2) || (ic && ic.inZone(x, z)) || (ex && ex.onDeck(x, z));
 const isLanes = [{ z: IS.z + 3.2, dir: 1 }, { z: IS.z + 9, dir: 1 }, { z: IS.z - 3.2, dir: -1 }, { z: IS.z - 9, dir: -1 }];
 // ---------- traffic lights at every grid crossing ----------
@@ -407,7 +415,7 @@ function streetName(x, z) {
   { const pc = player.car || player, nm = (ex && ex.nameAt(x, z)) || (ic ? ic.roadName(x, z) : null); if (nm) return nm; }
   if (fw.onDeck(x, z) && fw.heightAt(x, z) > 0) return 'Vice Bay Expressway (VB-1 / I-195)';
   if (inFwZone(x, z) && x < -183 && z < 196) return 'VB-1 Ramp';
-  for (const h of HWS) if (h.onRoad(x, z)) return `Interstate ${h.number}`;
+  for (const h of HWS) if (h.onRoad(x, z)) return h.us ? `US Route ${h.number}` : `Interstate ${h.number}`;
   if (inIsZone(x, z)) return z > IS.z - IS.W / 2 - 1 ? (x > IS.x1 - 6 ? 'I-395 Turnaround' : 'Interstate 395') : 'I-395 On-Ramp';
   if (z < -EDGE + 4) { const ps = port.streetAt(x, z); if (ps) return ps + ', Port Coral'; if (inWater(x, z)) return 'Port Coral Harbor'; if (z < -222) return 'Port Coral'; return 'Dockside Ave'; }
   let bi = 0, bj = 0; lines.forEach((l, k) => { if (Math.abs(l - x) < Math.abs(lines[bi] - x)) bi = k; if (Math.abs(l - z) < Math.abs(lines[bj] - z)) bj = k; });
@@ -1269,7 +1277,7 @@ function drawMinimap() {
   const vx0 = ccx - MMR - 5, vx1 = ccx + MMR + 5, vz0 = ccz - MMR - 5, vz1 = ccz + MMR + 5;
   mm.fillStyle = '#d8d8d8'; for (const c of colliders) if (c.maxX > vx0 && c.minX < vx1 && c.maxZ > vz0 && c.minZ < vz1) mm.fillRect(X(c.minX), Z(c.minZ), (c.maxX - c.minX) * sc, (c.maxZ - c.minZ) * sc);
   { const lab = (x, z, t) => { const lx = X(x), lz = Z(z); if (lx < 10 || lz < 10 || lx > MMS - 10 || lz > MMS - 10) return; const f = mmBig ? 15 : 10; mm.font = `bold ${f}px Arial`; mm.textAlign = 'center'; const w = mm.measureText(t).width + 8; mm.fillStyle = '#1d4fb8'; mm.fillRect(lx - w / 2, lz - f * 0.8, w, f * 1.4); mm.strokeStyle = '#fff'; mm.lineWidth = 1.5; mm.strokeRect(lx - w / 2, lz - f * 0.8, w, f * 1.4); mm.fillStyle = '#fff'; mm.fillText(t, lx, lz + f * 0.35); };
-    for (const h of HWS) { const sp = mmBig ? MMR * 0.5 : 160; let acc = -sp / 2; for (const g of h.segs) { let t0 = 0; while (acc + g.len * (1 - t0) >= 0) { const need = -acc; const t = t0 + need / g.len; if (t > 1) break; lab(g.a.x + (g.b.x - g.a.x) * t, g.a.z + (g.b.z - g.a.z) * t, 'I-' + h.number); t0 = t; acc = -sp; } acc += g.len * (1 - t0); } }
+    for (const h of HWS) { const sp = mmBig ? MMR * 0.5 : 160; let acc = -sp / 2; for (const g of h.segs) { let t0 = 0; while (acc + g.len * (1 - t0) >= 0) { const need = -acc; const t = t0 + need / g.len; if (t > 1) break; lab(g.a.x + (g.b.x - g.a.x) * t, g.a.z + (g.b.z - g.a.z) * t, (h.us ? 'US ' : 'I-') + h.number); t0 = t; acc = -sp; } acc += g.len * (1 - t0); } }
     if (MMR < 1500) { lab((IS.x0 + IS.x1) / 2 - 40, IS.z, 'I-395'); lab(FW.x, -60, 'VB-1'); }
     if (mmBig) { mm.font = 'bold 18px Arial'; mm.fillStyle = '#fff'; mm.textAlign = 'center'; mm.fillText('VICE BAY', X(0), Z(0)); mm.fillText('PORT CORAL', X(20), Z(-300)); mm.fillText('VICE BAY INTL ✈', X(-1970), Z(-260)); mm.fillText('PALMETTO SPRINGS', X(-150), Z(1830)); mm.fillText('VICE BAY HEIGHTS', X(-450), Z(-185)); mm.fillText('GATOR GLADES', X(100), Z(-2125)); for (const c of CITIES) mm.fillText(c.name.toUpperCase(), X(c.center.x), Z(c.bounds.minZ - 14)); } }
   const dot = (x, z, col, r = 5, txt) => { if (mmBig) r *= 1.3; mm.fillStyle = col; mm.beginPath(); mm.arc(clamp(X(x), 8, MMS - 8), clamp(Z(z), 8, MMS - 8), r, 0, 7); mm.fill(); if (txt) { mm.fillStyle = '#fff'; mm.font = 'bold 11px Arial'; mm.textAlign = 'center'; mm.fillText(txt, clamp(X(x), 8, MMS - 8), clamp(Z(z), 8, MMS - 8) + 4); } };
@@ -1543,6 +1551,6 @@ window.__mp = { net, remotes };
 refreshMissionMarkers(); applyQuality(); applyControls();
 gfx = setupGraphics(renderer, scene, camera, { quality: settings.quality === 'ultra' ? 'high' : settings.quality }); gfx.upgrade(scene); applyQuality();
 camera.position.set(player.x + 30, 40, player.z + 50); camera.lookAt(player.x, 0, player.z);
-window.__ex = ex; window.__game = { state, player, vehicles, peds, settings, enterCar, exitCar, addWanted, MISSIONS, startMission, POI, HWS };
+window.__ex = ex; window.__game = { scene, camera, renderer, sun, state, player, vehicles, peds, settings, enterCar, exitCar, addWanted, MISSIONS, startMission, POI, HWS };
 requestAnimationFrame(frame);
 { const vt = document.getElementById('verTag'); if (vt) vt.textContent = 'v' + VERSION; }
