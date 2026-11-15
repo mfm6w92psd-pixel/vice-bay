@@ -19,6 +19,7 @@ export const PROPERTIES = [
   { id: 'motel', name: 'Lakeside Motel', icon: '🏨', price: 6000, income: 340, x: -4700, z: 850, area: 'Lake Mirage' },
   { id: 'cabin', name: 'Pine Ridge Lodge', icon: '🌲', price: 3500, income: 200, x: -4700, z: -2600, area: 'Pine Ridge' },
   { id: 'marina', name: 'Palm Harbor Marina', icon: '⛵', price: 10000, income: 580, x: -7000, z: 850, area: 'Palm Harbor' },
+  { id: 'pier', name: 'Pelican Pier Seafood', icon: '🦐', price: 7000, income: 400, x: -2300, z: -3650, area: 'Pelican Bay' },
 ];
 const PAY_EVERY = 60;          // real seconds between payouts (= 2 in-game hours at 12 min/day)
 const SAFE_CAP = 10;           // safe holds at most 10 payouts
