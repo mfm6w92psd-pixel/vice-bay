@@ -115,7 +115,7 @@ const wpt = ([x, z]) => wp(x, z);
 const wRect = r => { const cx = (r.minX + r.maxX) / 2, cz = (r.minZ + r.maxZ) / 2, [nx, nz] = warpRaw(cx, cz), dx = nx - cx, dz = nz - cz; return { ...r, minX: r.minX + dx, maxX: r.maxX + dx, minZ: r.minZ + dz, maxZ: r.maxZ + dz }; };
 const AIR0 = { minX: -2232, maxX: -1698, minZ: -393, maxZ: -29 }, TOWN0 = { minX: -312, maxX: 12, minZ: 1688, maxZ: 2012 }, SWAMP0 = { minX: -122, maxX: 322, minZ: -2112, maxZ: -1688 };
 WARP_SITES.push({ rect: AIR0, pad: 60 }, { rect: TOWN0, pad: 20 }, { rect: SWAMP0, pad: 20 });
-for (const [x, z] of [[-150, 4700], [100, -4700], [-4700, 850], [-4700, -2600], [-7000, 850], [-2300, -3650], [-3300, -750]]) WARP_SITES.push({ x, z, r: 420, city: true });
+for (const [x, z] of [[-150, 4700], [100, -4700], [-4700, 850], [-4700, -2600], [-7000, 850], [-2300, -3650], [-3300, -750], [-5840, -3940]]) WARP_SITES.push({ x, z, r: 420, city: true });
 for (const [x, z] of [[-150, 2500], [100, -2550], [-4700, 0]]) WARP_SITES.push({ x, z, r: 420 });
 const AIRC = wp(-1970, -211), TOWNC = wp(-150, 1850), AOX = AIRC[0] + 1970, AOZ = AIRC[1] + 211, TOX = TOWNC[0] + 150, TOZ = TOWNC[1] - 1850;
 // highways that meet a city edge at an angle get a short straight stub, so they line up with the street instead of the buildings beside it
@@ -328,6 +328,7 @@ const CITIES = [
   buildCity(scene, { name: 'Palm Harbor', x: wp(-7000, 850)[0], z: wp(-7000, 850)[1], seed: 23, addCol }),
   buildCity(scene, { name: 'Pelican Bay', x: wp(-2300, -3650)[0], z: wp(-2300, -3650)[1], seed: 29, addCol }),
   buildCity(scene, { name: 'Coral Springs', x: wp(-3300, -750)[0], z: wp(-3300, -750)[1], seed: 31, addCol }),
+  buildCity(scene, { name: 'Cedar Key', x: wp(-5840, -3940)[0], z: wp(-5840, -3940)[1], seed: 37, addCol }),
 ];
 const npcLots = [];
 // NPC sidewalks for the newer areas: city blocks, downtown blocks, and small stroll loops at district spawn points
@@ -380,6 +381,9 @@ HWS.push(
   buildInterstate(scene, { number: 34, name: 'Gulf Prairie', points: [[-5382.8, -2600.0], [-4600.0, -5220.0]], addCol, startMile: 520 }),
   buildInterstate(scene, { number: 36, name: 'Harbor Cutoff', points: [[-7000.0, -1120.0], [-4550.0, -1650.0]], addCol, startMile: 540 }),
   buildInterstate(scene, { number: 38, name: 'North Shore', points: [[-835.0, 5139.6], [-3750.0, 4962.4]], addCol, startMile: 560 }),
+  // New Bot: Cedar Key, a new city in the north-west, reached from US-1 (I-42) and I-34 (I-44)
+  buildInterstate(scene, { number: 42, name: 'Cedar Key', points: [[-5840, -4973.3], [-5840, -4267]], addCol, startMile: 580 }),
+  buildInterstate(scene, { number: 44, name: 'Cedar Run', points: [[-5513, -3940], [-4982.6, -3940]], addCol, startMile: 600 }),
 );
 // keep farm barns out from under flyovers (one used to block the SR-70 underpass on I-95)
 for (const [cx, cz, r] of [[-150, 1450, 140], [100, -3950, 300], [-150, 15600, 300], [100, -18600, 300], [-20300, -8100, 300], [-31800, 6800, 300], [...wp(-150, 2500), 300], [...wp(100, -2550), 300], [...wp(-4700, 0), 300], [...wp(-7000, -1000), 300], [...wp(-4700, 1900), 300], [...wp(-7000, 2100), 300]]) {
