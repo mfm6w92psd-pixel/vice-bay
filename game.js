@@ -15,6 +15,9 @@ import { createNet } from './net.js';
 import { buildInterchange, combineRoads } from './assets/interchange.js';
 import { buildExpressway } from './assets/expressway.js';
 import { VERSION, openVersionHistory } from './assets/changelog.js';
+import { buildStuntJumps } from './assets/stunts.js';
+import { openShop } from './assets/shop.js';
+import { PROPERTIES, resolveProperties, openProperty, tickIncome, propertyAt, resetProperties } from './assets/properties.js';
 import { makeNPC, pickNPCType, animateNPC, setNPCPanic } from './assets/npcs.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -40,7 +43,13 @@ let seed = 1337; const srand = () => { seed = (seed * 16807) % 2147483647; retur
 
 // ---------- renderer / scene ----------
 const canvas = $('game');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
+let renderer;
+try { renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' }); }
+catch (e) {
+  const d = document.createElement('div'); d.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;background:#0b0820;color:#fff;font:600 18px sans-serif';
+  d.innerHTML = 'Vice Bay needs 3D graphics (WebGL), and this browser couldn\'t start it.<br><br>Try Safari or Chrome, turn off Low Power Mode, or restart the browser.'; document.body.appendChild(d);
+  throw e;
+}
 renderer.shadowMap.enabled = settings.quality !== 'low';
 renderer.shadowMap.type = THREE.PCFShadowMap;
 const scene = new THREE.Scene();
@@ -199,7 +208,8 @@ for (const s of [-1, 1]) addCol(FW.x + s * (FW.W / 2 + 1.2), (FW.z0 + FW.z1) / 2
   const so = new THREE.Mesh(new THREE.PlaneGeometry(46, 30), am); so.rotation.x = -Math.PI / 2; so.position.set(-193, 0.013, 200); so.receiveShadow = true; scene.add(so); }
 const inFwZone = (x, z) => (x >= FW.x - FW.W / 2 - 1 && x <= -180 && z >= FW.z0 - 12 && z <= FW.z1 + 12) || (x >= -217 && x <= -66 && z >= FW.z0 - 12 && z <= FW.z0 + 10) || (x >= -217 && x <= -168 && z >= 180 && z <= 216);
 // surface height under a thing at (x,z) that is currently at height y (ramp/deck vs. ground underneath)
-const surfaceY = (x, z, y = 0) => { if (inRect(SWAMP, x, z) && onSwampRoad(x, z)) return 0.45; const h = fw.heightAt(x, z), g = ic ? ic.heightAt(x, z, y) : 0, e = ex ? ex.heightAt(x, z, y) : 0; return Math.max(h > 0 && y + 1.6 >= h ? h : 0, g, e); };
+const surfaceY = (x, z, y = 0) => { if (inRect(SWAMP, x, z) && onSwampRoad(x, z)) return 0.45; const h = fw.heightAt(x, z), g = ic ? ic.heightAt(x, z, y) : 0, e = ex ? ex.heightAt(x, z, y) : 0, st = stunts ? stunts.heightAt(x, z, y) : 0; return Math.max(h > 0 && y + 1.6 >= h ? h : 0, g, e, st); };
+let stunts = null;
 let ex = null;
 let ic = null;
 // ---------- Interstate 395 spur along the south edge (ground level, 4 lanes + median) ----------
@@ -316,6 +326,12 @@ const isLanes = [{ z: IS.z + 3.2, dir: 1 }, { z: IS.z + 9, dir: 1 }, { z: IS.z -
 // ---------- traffic lights at every grid crossing ----------
 const tl = new TrafficLights(scene);
 for (const ix of lines) for (const iz of lines) if (Math.abs(ix) < HALF && Math.abs(iz) < HALF) tl.addIntersection(ix, iz, RW);
+// Mika's stunt jumps + New Bot 1's Bay Supply Co. shops
+stunts = buildStuntJumps(scene, { addCol });
+const SHOPS = [{ x: lines[3] + 10, z: lines[2] + 10 }, { x: -440, z: 10 }, ...CITIES.map(c => ({ x: c.center.x + 10, z: c.center.z + 10 }))];
+for (const sh of SHOPS) { const m = M.makeMarker(0x00c2ff); m.position.set(sh.x, 1.5, sh.z); m.scale.set(1.4, 0.6, 1.4); scene.add(m); sh.mesh = m; }
+resolveProperties(POI);
+for (const pr of PROPERTIES) { const m = M.makeMarker(pr.owned ? 0x3ddc84 : 0xffcf3c); m.position.set(pr.x, 1.5, pr.z); m.scale.set(1.6, 0.7, 1.6); scene.add(m); pr.mesh = m; pr._own = pr.owned; }
 const poiMarkers = {};
 for (const [id, p] of Object.entries(POI)) {
   if (['beach', 'gas', 'dock'].includes(id)) continue;
@@ -656,7 +672,7 @@ function spawnFleeingDriver(v) {
   p.s = best; placePed(p, 0); p.state = 'flee'; p.t = 8; p.speed = 5.5;
 }
 function exitCar(force) {
-  const v = player.car; if (!v) return;
+  const v = player.car; if (!v) return; player.lastCar = v; v.pitch = 0;
   if (!force && Math.abs(v.speed) > 6) { v.speed *= 0.5; }
   const [fx_, fz_] = fwd(v.heading), rx = -fz_, rz = fx_; // right vector
   let ex = v.x - rx * 2.4, ez = v.z - rz * 2.4;
@@ -747,7 +763,7 @@ function moveCar(v, dt, ai) {
     if (ai) { v.reverseT = 0.9; v.turnDir = Math.random() < 0.5 ? 1 : -1; }
     return;
   }
-  v.y = surfaceY(v.x, v.z, v.y || 0);
+  if (v === player.car) { const r = stunts.carY(v, dt, surfaceY(v.x, v.z, v.y || 0)); if (r) { player.money += r.reward; showMsg(r.text, 3); } } else v.y = surfaceY(v.x, v.z, v.y || 0);
   if (v === player.car && ex.tollPt) { const t = ex.tollPt, dd = Math.hypot(v.x - t.x, v.z - t.z); if (dd < 9 && Math.abs(v.y - t.h) < 2 && !ex.paid) { ex.paid = true; const c = Math.min(player.money, t.cost); player.money -= c; showMsg(c ? `🛣️ Toll -$${c}` : '🛣️ Toll skipped, no cash!', 2); } else if (dd > 30) ex.paid = false; }
   if (v.y > 0.5) { fw.clampToDeck(v); ic.clampToDeck(v); ex.clamp(v); }
   const hit = collideCircle(v.x, v.z, v.kind === 'bike' ? 1.1 : 1.7, v.y || 0);
@@ -900,7 +916,7 @@ function loadGame() {
   state.done = s.done || []; state.time = s.time ?? 0.4; state.wanted = 0; vehicles.filter(v => v.type === 'police').forEach(removeVehicle);
   refreshMissionMarkers(); showMsg('Game loaded'); return true;
 }
-function newGame() {
+function newGame() { resetProperties();
   if (player.car) exitCar(true); endMission();
   Object.assign(player, { money: 500, health: 100, armor: 0, weapon: 1, x: POI.safe.x + 6, z: POI.safe.z - 4, y: 0 }); state.saveCD = 6;
   state.done = []; state.time = 0.4; state.wanted = 0; vehicles.filter(v => v.type === 'police').forEach(removeVehicle);
@@ -1256,6 +1272,7 @@ function drawMinimap() {
   if (tgt) { const r = route(px, pz, tgt.x, tgt.z); if (tgt.z < -EDGE || pz < -EDGE) { r.length = 0; if (pz < -EDGE && tgt.z > -EDGE) { r.push([px, pz], [0, pz], [0, -180], ...route(0, -180, tgt.x, tgt.z)); } else if (tgt.z < -EDGE && pz > -EDGE) { r.push(...route(px, pz, 0, -180), [0, -180], [0, tgt.z], [tgt.x, tgt.z]); } else r.push([px, pz], [0, pz], [0, tgt.z], [tgt.x, tgt.z]); } mm.strokeStyle = '#ff5e7e'; mm.lineWidth = 5; mm.beginPath(); r.forEach(([x, z], i) => i ? mm.lineTo(X(x), Z(z)) : mm.moveTo(X(x), Z(z))); mm.stroke(); }
   dot(POI.spray.x, POI.spray.z, '#00a86b', 8, '$'); dot(POI.hospital.x, POI.hospital.z, '#2b6cff', 8, 'H'); dot(POI.safe.x, POI.safe.z, '#8a5cff', 8, 'S'); dot(POI.police.x, POI.police.z, '#c0392b', 8, 'P'); dot(POI.garage.x, POI.garage.z, '#00a86b', 7, 'C'); dot(POI.diner.x, POI.diner.z, '#ff9f1c', 7, 'D'); for (const [x, z] of HELIPADS) dot(x, z, '#333a44', 6, 'H');
   if (!state.mission) for (const m of missionMarkers) dot(m.mesh.position.x, m.mesh.position.z, '#ffd23f', 8, '!');
+  for (const sh of SHOPS) dot(sh.x, sh.z, '#00c2ff', 6, '$'); for (const pr of PROPERTIES) dot(pr.x, pr.z, pr.owned ? '#3ddc84' : '#ffcf3c', 7, '⌂'); for (const q of stunts.spots) dot(q.x, q.z, '#ff8a00', 6, '★');
   for (const p of pickups) dot(p.x, p.z, '#' + PK[p.kind][0].toString(16).padStart(6, '0'), 3);
   for (const v of vehicles) if (v.type === 'police' && !v.dead) dot(v.x, v.z, Math.floor(state.now * 6) % 2 ? '#ff2d2d' : '#2d6bff', 5);
   if (tgt) dot(tgt.x, tgt.z, '#ff5e7e', 7);
@@ -1316,6 +1333,10 @@ function updateInteractions(dt) {
     }
   }
   // POIs
+  tickIncome(dt);
+  if (!player.car && !state.mission && !state.shopOpen) { const pr = propertyAt(px, pz); if (pr) { state.shopOpen = true; openProperty({ property: pr, player, showMsg, onSave: () => saveGame(), onClose: () => { state.shopOpen = false; } }); } }
+  for (const pr of PROPERTIES) if (pr._own !== pr.owned) { pr._own = pr.owned; pr.mesh.material.color?.set(pr.owned ? 0x3ddc84 : 0xffcf3c); }
+  for (const sh of SHOPS) { const near = !player.car && !state.mission && Math.hypot(sh.x - px, sh.z - pz) < 3; if (near && !sh.in && !state.shopOpen) { state.shopOpen = true; openShop({ player, showMsg, onClose: () => { state.shopOpen = false; } }); } sh.in = near; }
   if (player.car && Math.hypot(POI.spray.x - px, POI.spray.z - pz) < 4 && state.saveCD <= 0 && !state.mission) {
     state.saveCD = 6;
     if (player.money < 100) showMsg('Spray Shop: $100 needed');
@@ -1378,7 +1399,7 @@ function frame(nowMs) {
       v.mesh.position.set(v.x, -0.3 + Math.sin(state.now * 2 + v.x) * 0.08, v.z); v.mesh.rotation.set(-clamp(v.speed / 60, -0.1, 0.12), v.heading, Math.sin(state.now * 1.6 + v.z) * 0.04, 'YXZ');
       if (v.mesh.userData.wake) v.mesh.userData.wake.visible = Math.abs(v.speed) > 3;
     } else {
-      v.mesh.position.set(v.x, v.y || 0, v.z); v.mesh.rotation.y = v.heading + (v.drift || 0);
+      v.mesh.position.set(v.x, v.y || 0, v.z); v.mesh.rotation.y = v.heading + (v.drift || 0); if (v.pitch || v.mesh.rotation.x) { v.mesh.rotation.order = 'YXZ'; v.mesh.rotation.x = v.pitch || 0; }
       if (!v.dead && v.mesh.userData.wheels?.length) M.animateCar(v.mesh, v.speed, dt, v.braking || (v.type === 'traffic' && v.speed < 3), state.now);
     }
   }
