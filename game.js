@@ -114,7 +114,7 @@ const wpt = ([x, z]) => wp(x, z);
 const wRect = r => { const cx = (r.minX + r.maxX) / 2, cz = (r.minZ + r.maxZ) / 2, [nx, nz] = warpRaw(cx, cz), dx = nx - cx, dz = nz - cz; return { ...r, minX: r.minX + dx, maxX: r.maxX + dx, minZ: r.minZ + dz, maxZ: r.maxZ + dz }; };
 const AIR0 = { minX: -2232, maxX: -1698, minZ: -393, maxZ: -29 }, TOWN0 = { minX: -312, maxX: 12, minZ: 1688, maxZ: 2012 }, SWAMP0 = { minX: -122, maxX: 322, minZ: -2112, maxZ: -1688 };
 WARP_SITES.push({ rect: AIR0, pad: 60 }, { rect: TOWN0, pad: 20 }, { rect: SWAMP0, pad: 20 });
-for (const [x, z] of [[-150, 4700], [100, -4700], [-4700, 850], [-4700, -2600], [-7000, 850]]) WARP_SITES.push({ x, z, r: 420, city: true });
+for (const [x, z] of [[-150, 4700], [100, -4700], [-4700, 850], [-4700, -2600], [-7000, 850], [-2300, -3650]]) WARP_SITES.push({ x, z, r: 420, city: true });
 for (const [x, z] of [[-150, 2500], [100, -2550], [-4700, 0]]) WARP_SITES.push({ x, z, r: 420 });
 const AIRC = wp(-1970, -211), TOWNC = wp(-150, 1850), AOX = AIRC[0] + 1970, AOZ = AIRC[1] + 211, TOX = TOWNC[0] + 150, TOZ = TOWNC[1] - 1850;
 // highways that meet a city edge at an angle get a short straight stub, so they line up with the street instead of the buildings beside it
@@ -325,6 +325,7 @@ const CITIES = [
   buildCity(scene, { name: 'Lake Mirage', x: wp(-4700, 850)[0], z: wp(-4700, 850)[1], seed: 11, addCol }),
   buildCity(scene, { name: 'Pine Ridge', x: wp(-4700, -2600)[0], z: wp(-4700, -2600)[1], seed: 19, addCol }),
   buildCity(scene, { name: 'Palm Harbor', x: wp(-7000, 850)[0], z: wp(-7000, 850)[1], seed: 23, addCol }),
+  buildCity(scene, { name: 'Pelican Bay', x: wp(-2300, -3650)[0], z: wp(-2300, -3650)[1], seed: 29, addCol }),
 ];
 const npcLots = [];
 // NPC sidewalks for the newer areas: city blocks, downtown blocks, and small stroll loops at district spawn points
@@ -362,6 +363,8 @@ HWS.push(
   buildInterstate(scene, { number: 16, name: 'Central', points: [[-4460, -2273], [-3600, -1600], [-2800, -1300], [-2100, -400]], addCol, startMile: 360 }),
   buildInterstate(scene, { number: 595, name: 'Sawgrass', points: [[-6000, 2600], [-5000, 3900], [-3000, 5600]], addCol, startMile: 390 }),
   buildInterstate(scene, { number: 22, name: 'Suncoast', points: [[-6000, -2600], [-6500, -3300], [-7300, -4000]], addCol, startMile: 420 }),
+  buildInterstate(scene, { number: 24, name: 'Pelican Bay', points: [[-2300, -3323], [-2650, -3110], [-3000, -2900]], addCol, startMile: 450 }),
+  buildInterstate(scene, { number: 28, name: 'Pelican Bay South', points: [[-2300, -3977], [-2650, -4140], [-3000, -4300]], addCol, startMile: 470 }),
 );
 // keep farm barns out from under flyovers (one used to block the SR-70 underpass on I-95)
 for (const [cx, cz, r] of [[-150, 1450, 140], [...wp(-150, 2500), 300], [...wp(100, -2550), 300], [...wp(-4700, 0), 300]]) {
