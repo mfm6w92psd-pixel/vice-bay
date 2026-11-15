@@ -295,6 +295,7 @@ const CITIES = [
   buildCity(scene, { name: 'Cypress Point', x: 100, z: -4700, seed: 7, addCol }),
   buildCity(scene, { name: 'Lake Mirage', x: -4700, z: 850, seed: 11, addCol }),
   buildCity(scene, { name: 'Pine Ridge', x: -4700, z: -2600, seed: 19, addCol }),
+  buildCity(scene, { name: 'Palm Harbor', x: -7000, z: 850, seed: 23, addCol }),
 ];
 const npcLots = [];
 // NPC sidewalks for the newer areas: city blocks, downtown blocks, and small stroll loops at district spawn points
@@ -322,6 +323,7 @@ HWS.push(
   buildInterstate(scene, { number: 8, name: 'Southern', points: [[-227, -4700], [-1500, -4700], [-3000, -4300], [-4700, -2927]], addCol, startMile: 120 }),
   buildInterstate(scene, { number: 26, name: 'Lakeshore', points: [[-477, 4700], [-1800, 4700], [-3200, 3800], [-4700, 2600], [-4700, 1177]], addCol, startMile: 140 }),
   buildInterstate(scene, { number: 14, name: 'Glades', points: [[-122, -1900], [-1000, -1900], [-1970, -1100], [-1970, -400]], addCol, startMile: 160 }),
+  buildInterstate(scene, { number: 6, name: 'Palm Harbor', points: [[-5027, 850], [-5800, 850], [-6200, 650], [-6673, 650]], addCol, startMile: 180 }),
   buildInterstate(scene, { number: 275, name: 'Pine Ridge', points: [[-4700, 523], [-4700, -500], [-4400, -1300], [-4700, -2000], [-4700, -2273]], addCol }),
 );
 const inHw = (x, z) => CITIES.some(c => c.inside(x, z)) || inRect(SWAMP, x, z) || inRect(DT, x, z) || LINKS.some(r => inRect(r, x, z)) || inRect(AIR, x, z) || inRect(TOWN, x, z) || HWS.some(h => h.nearest(x, z).dist < h.width / 2 + 2) || (ic && ic.inZone(x, z)) || (ex && ex.onDeck(x, z));
