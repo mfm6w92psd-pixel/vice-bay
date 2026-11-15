@@ -219,6 +219,7 @@ const inIsZone = (x, z) => (x >= IS.x0 - 2 && x <= IS.x1 + 30 && z >= IS.z - IS.
 const HWS = [
   buildInterstate(scene, { number: 95, name: 'Vice Bay', points: [[0, IS.z + IS.W / 2], [0, 700], [-150, 1000], [-150, 1700]], addCol }),
   buildInterstate(scene, { number: 75, name: 'Port Coral', points: [[-150, FW.z0 - 11], [-150, -700], [100, -1000], [100, -1700]], addCol, startMile: 20 }),
+  buildInterstate(scene, { number: 295, name: 'West Bypass', points: [[-700, FW.z0 - 1], [-700, 850], [-150, 1000]], addCol }),
   buildInterstate(scene, { number: 10, name: 'Vice Bay', points: [[-216, FW.z0 - 1], [-700, FW.z0 - 1], [-1000, -41], [-1700, -41]], addCol }),
 ];
 // Mika's districts at the far ends of I-10 and I-95

@@ -1,0 +1,9 @@
+<!doctype html><html><head><script type="importmap">{"imports":{"three":"../vendor/three.module.js"}}</script><style>body{margin:0}</style></head><body><script type="module">
+import * as THREE from 'three'; import * as M from './models.js'; import {buildSwamp,buildDowntown} from './regions.js';
+const r=new THREE.WebGLRenderer({antialias:true});r.setSize(innerWidth,innerHeight);r.shadowMap.enabled=true;document.body.appendChild(r.domElement);
+const s=new THREE.Scene();s.background=M.skyColor(0.5);s.add(new THREE.HemisphereLight(0xffffff,0x445566,1.2));const sun=new THREE.DirectionalLight(0xffe0c0,2);sun.position.set(60,120,30);sun.castShadow=true;Object.assign(sun.shadow.camera,{left:-300,right:300,top:300,bottom:-300,far:700});sun.shadow.mapSize.set(2048,2048);s.add(sun);s.add(sun.target);
+const cam=new THREE.PerspectiveCamera(50,innerWidth/innerHeight,0.5,3000);let R;
+window.onerror=e=>document.title='ERR '+e;
+if(location.hash==='#d'){R=buildDowntown(s,{x:0,z:0});cam.position.set(-260,200,330);cam.lookAt(0,40,0);}else{R=buildSwamp(s,{x:0,z:0});cam.position.set(180,120,280);cam.lookAt(0,0,0);}
+let f=0;(function loop(){R.update(0.05);r.render(s,cam);if(++f<30)requestAnimationFrame(loop);})();
+</script></body></html>
