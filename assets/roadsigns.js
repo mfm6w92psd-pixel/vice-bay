@@ -93,6 +93,31 @@ function entranceSign(num, us, dir, dest) {
   const sh = shieldSign(num, us, dir).children[0].clone(); sh.geometry = new THREE.PlaneGeometry(1.9, 2.6); sh.position.set(-2.3, 4.85, 0.02); g.add(sh);
   return g;
 }
+
+// arrow-shaped arm for a city direction signpost; text on both faces, tip toward the target
+function armTex(name, mi, tipLeft) {
+  return tex(`a:${name}:${mi}:${tipLeft ? 'L' : 'R'}`, 384, 72, (x, w, h) => {
+    x.clearRect(0, 0, w, h); x.beginPath();
+    if (tipLeft) { x.moveTo(0, h / 2); x.lineTo(40, 2); x.lineTo(w - 2, 2); x.lineTo(w - 2, h - 2); x.lineTo(40, h - 2); }
+    else { x.moveTo(w, h / 2); x.lineTo(w - 40, 2); x.lineTo(2, 2); x.lineTo(2, h - 2); x.lineTo(w - 40, h - 2); }
+    x.closePath(); x.fillStyle = '#0b6b3a'; x.fill(); x.lineWidth = 4; x.strokeStyle = '#fff'; x.stroke();
+    x.fillStyle = '#fff'; x.font = `bold ${name.length > 12 ? 26 : 30}px sans-serif`; x.textBaseline = 'middle';
+    const l = tipLeft ? 50 : 16, r = tipLeft ? w - 16 : w - 50;
+    x.textAlign = 'left'; x.fillText(name, l, h / 2 + 2); x.textAlign = 'right'; x.fillText(String(mi), r, h / 2 + 2);
+  });
+}
+function signpost(arms) {   // arms: [{ name, mi, ang }]  ang = direction in radians (rotation.y that maps +x toward target)
+  const g = new THREE.Group(), H = 3.2 + arms.length * 0.75;
+  const post = new THREE.Mesh(new THREE.BoxGeometry(0.18, H, 0.18), postMat); post.position.y = H / 2; g.add(post);
+  arms.forEach((a, i) => {
+    const arm = new THREE.Group(); arm.rotation.y = a.ang; arm.position.y = H - 0.45 - i * 0.75;
+    const geo = new THREE.PlaneGeometry(3.6, 0.68);
+    const f = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: armTex(a.name, a.mi, false), transparent: true, alphaTest: 0.5 })); f.position.set(1.9, 0, 0.02); arm.add(f);
+    const b = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: armTex(a.name, a.mi, true), transparent: true, alphaTest: 0.5 })); b.position.set(1.9, 0, -0.02); b.rotation.y = Math.PI; arm.add(b);
+    g.add(arm);
+  });
+  return g;
+}
 const CARD = (dx, dz) => Math.abs(dx) > Math.abs(dz) ? (dx > 0 ? 'EAST' : 'WEST') : (dz < 0 ? 'NORTH' : 'SOUTH');
 
 export function buildRoadSigns(scene, { highways, places = [], cityRadius = 450 } = {}) {
@@ -151,6 +176,15 @@ export function buildRoadSigns(scene, { highways, places = [], cityRadius = 450 
       if (first.len > 120 && endCity) put(entranceSign(h.number, h.us, CARD(first.dir.x, first.dir.z), endCity.name), at(first, 35, -side - 2), first.ang + Math.PI);
       if (last.len > 120 && startCity) put(entranceSign(h.number, h.us, CARD(-last.dir.x, -last.dir.z), startCity.name), at(last, last.len - 35, side + 2), last.ang);
     }
+  }
+  // direction signposts at a corner of each place's central crossroads
+  for (const c of places) {
+    if (c.signpost === false || /airport/i.test(c.name)) continue;   // no post on the runway
+    const others = places.filter(o => o !== c).map(o => ({ o, d: Math.hypot(o.x - c.x, o.z - c.z) })).sort((a, b) => a.d - b.d).slice(0, 5);
+    if (!others.length) continue;
+    const ox = c.x + (c.postDx ?? 11), oz = c.z + (c.postDz ?? 11);
+    const sp = signpost(others.map(({ o }) => ({ name: o.name, mi: Math.max(1, Math.round(Math.hypot(o.x - ox, o.z - oz) / UNITS_PER_MILE)), ang: Math.atan2(-(o.z - oz), o.x - ox) })));
+    sp.position.set(ox, 0, oz); root.add(sp); count++;
   }
   return { root, count };
 }
