@@ -13,7 +13,7 @@ import { buildSwamp, buildDowntown, makeAirboat } from './assets/regions.js';
 const $ = id => document.getElementById(id);
 const audio = new GameAudio();
 const SAVE_KEY = 'vicebay_save_v1', SET_KEY = 'vicebay_settings_v1';
-const settings = Object.assign({ quality: 'medium', volume: 0.6, radio: true, rain: 'auto', leftHanded: false, btnScale: 1, sens: 1 },
+const settings = Object.assign({ quality: 'medium', volume: 0.6, radio: true, station: 0, rain: 'auto', leftHanded: false, btnScale: 1, sens: 1 },
   JSON.parse(localStorage.getItem(SET_KEY) || '{}'));
 const saveSettings = () => localStorage.setItem(SET_KEY, JSON.stringify(settings));
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -516,7 +516,7 @@ function enterCar() {
   if (v.type === 'traffic' || v.type === 'fwtraffic' || v.type === 'istraffic' || v.type === 'hwtraffic') { const cops = vehicles.some(o => o.type === 'police' && Math.hypot(o.x - v.x, o.z - v.z) < 50); if (cops) addWanted(1); showMsg(`Carjacked a ${v.name}`); spawnFleeingDriver(v); }
   if (v.type === 'police') { addWanted(2); showMsg('Stole a police cruiser!'); }
   v.type = 'player'; v.plan = null; player.car = v; player.mode = 'car'; player.mesh.visible = false;
-  audio.startEngine(); if (settings.radio) audio.startRadio();
+  audio.startEngine(); audio.station = settings.station || 0; if (settings.radio) { audio.startRadio(); showMsg('📻 ' + audio.stationName, 2); }
   if (state.mission?.onEnter) state.mission.onEnter(v);
 }
 function spawnFleeingDriver(v) {
@@ -752,6 +752,15 @@ function bindBtn(id, key) {
   el.addEventListener('mousedown', down); el.addEventListener('mouseup', up); el.addEventListener('mouseleave', up);
 }
 bindBtn('btnShoot', 'shoot'); bindBtn('btnJump', 'jump'); bindBtn('btnSprint', 'sprint'); bindBtn('btnEnter', 'enter'); bindBtn('btnWeapon', 'weapon'); bindBtn('btnHorn', 'horn');
+function nextStation() {
+  if (!player.car) return; audio.unlock(); audio.station = settings.station || 0;
+  if (!settings.radio) { settings.radio = true; audio.startRadio(); }
+  else if ((audio.station || 0) + 1 >= GameAudio.STATIONS.length) { settings.radio = false; audio.stopRadio(); settings.station = 0; audio.station = 0; saveSettings(); $('setRadio').value = '0'; showMsg('📻 Radio off', 1.5); return; }
+  else audio.nextStation();
+  settings.station = audio.station; saveSettings(); $('setRadio').value = '1'; showMsg('📻 ' + audio.stationName, 2);
+}
+{ const rb = $('btnRadio'); const go = e => { e.preventDefault(); e.stopPropagation(); nextStation(); }; rb.addEventListener('touchstart', go, { passive: false }); rb.addEventListener('mousedown', go); }
+addEventListener('keydown', e => { if (e.code === 'KeyR' && !e.repeat) nextStation(); });
 canvas.addEventListener('touchstart', e => {
   e.preventDefault(); audio.unlock();
   for (const t of e.changedTouches) {
@@ -1056,7 +1065,7 @@ function updateHud() {
   $('btnShoot').textContent = player.weapon === 1 ? '🔫' : '👊';
   $('btnEnter').textContent = player.car ? 'EXIT' : 'CAR';
   const hk = player.car?.kind === 'heli'; $('btnJump').textContent = hk ? 'UP' : player.car ? 'BRAKE' : 'JUMP'; $('btnSprint').textContent = hk ? 'DOWN' : player.car ? 'DRIFT' : 'RUN';
-  $('btnHorn').style.display = player.car ? '' : 'none'; $('btnWeapon').style.display = player.car ? 'none' : ''; $('btnShoot').style.display = player.car ? 'none' : '';
+  $('btnHorn').style.display = player.car ? '' : 'none'; $('btnRadio').style.display = player.car ? '' : 'none'; $('btnWeapon').style.display = player.car ? 'none' : ''; $('btnShoot').style.display = player.car ? 'none' : '';
   const m = state.mission; $('timer').textContent = m && m.t != null && m.t > 0 ? `${Math.floor(m.t / 60)}:${String(Math.floor(m.t % 60)).padStart(2, '0')}` : '';
   // context prompt
   let pr = '';

@@ -64,3 +64,5 @@ html,body{margin:0;height:100%;overflow:hidden;background:#000;font-family:-appl
 
 #minimap.big{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(92vw,88vh);height:min(92vw,88vh);border-radius:14px;z-index:50}
 #mmhint{position:fixed;left:50%;bottom:4vh;transform:translateX(-50%);color:#fff;font:bold 14px Arial;text-shadow:0 1px 3px #000;z-index:51;display:none;pointer-events:none}
+
+#btnRadio{right:170px;bottom:130px}#buttons.left #btnRadio{right:auto;left:170px}
