@@ -1,0 +1,12 @@
+<!doctype html><html><head><script type="importmap">{"imports":{"three":"../vendor/three.module.js"}}</script><style>body{margin:0}</style></head><body><script type="module">
+import * as THREE from 'three'; import * as M from './models.js'; import {makeNPC,animateNPC,NPC_TYPES,setNPCPanic} from './npcs.js';
+window.onerror=e=>document.title='ERR '+e;
+const r=new THREE.WebGLRenderer({antialias:true});r.setSize(innerWidth,innerHeight);r.shadowMap.enabled=true;document.body.appendChild(r.domElement);
+const s=new THREE.Scene();s.background=M.skyColor(0.5);s.add(new THREE.HemisphereLight(0xffffff,0x445566,1.2));const sun=new THREE.DirectionalLight(0xffe0c0,2);sun.position.set(5,10,-8);sun.castShadow=true;s.add(sun);
+const gnd=new THREE.Mesh(new THREE.PlaneGeometry(40,20),M.mat(0xc9c2b0));gnd.rotation.x=-Math.PI/2;gnd.receiveShadow=true;s.add(gnd);
+const cam=new THREE.PerspectiveCamera(35,innerWidth/innerHeight,0.1,100);cam.position.set(0,2.2,-9.5);cam.lookAt(0,1,0);
+const types=Object.keys(NPC_TYPES);const ps=types.map((t,i)=>{const p=makeNPC(t);p.position.x=(i-3.5)*1.15;s.add(p);return p});
+const sp=[1.3,0,3.5,0,1.4,0.7,0,1.5];
+for(let f=0;f<8;f++)ps.forEach((p,i)=>animateNPC(p,sp[i],0.05));
+r.render(s,cam);
+</script></body></html>

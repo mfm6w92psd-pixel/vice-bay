@@ -280,6 +280,11 @@ const CITIES = [
   buildCity(scene, { name: 'Lake Mirage', x: -4700, z: 850, seed: 11, addCol }),
   buildCity(scene, { name: 'Pine Ridge', x: -4700, z: -2600, seed: 19, addCol }),
 ];
+const npcLots = [];
+// NPC sidewalks for the newer areas: city blocks, downtown blocks, and small stroll loops at district spawn points
+for (const c of CITIES) { const L = c.lines; for (let i = 0; i < L.length - 1; i++) for (let j = 0; j < L.length - 1; j++) npcLots.push({ cx: c.center.x + (L[i] + L[i + 1]) / 2, cz: c.center.z + (L[j] + L[j + 1]) / 2, h: (L[i + 1] - L[i] - 14) / 2 - 1.5 }); }
+{ const L = [-160, -80, 0, 80, 160]; for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) npcLots.push({ cx: -450 + (L[i] + L[i + 1]) / 2, cz: (L[j] + L[j + 1]) / 2, h: 28.5 }); }
+for (const d of [airport, town, swamp]) for (const q of (d.spawns?.pedestrians || [])) npcLots.push({ cx: q.x, cz: q.z, h: 2 + Math.random() * 2 });
 HWS.push(
   buildInterstate(scene, { number: 95, name: 'Sunrise City', points: [[-150, 2000], [-150, 3000], [100, 3600], [-150, 4100], [-150, 4373]], addCol, startMile: 30 }),
   buildInterstate(scene, { number: 75, name: 'Cypress Point', points: [[100, -2100], [100, -3000], [-200, -3600], [100, -4100], [100, -4373]], addCol, startMile: 45 }),
@@ -488,8 +493,8 @@ function updateFx(dt) {
 // ---------- pedestrians ----------
 const peds = [];
 const PH = 21.5, PER = 8 * PH;
-function perim(s) {
-  s = ((s % PER) + PER) % PER; const h = PH;
+function perim(s, h = PH) {
+  const PER = 8 * h; s = ((s % PER) + PER) % PER;
   if (s < 2 * h) return [-h + s, -h, 1, 0];
   if (s < 4 * h) return [h, -h + (s - 2 * h), 0, 1];
   if (s < 6 * h) return [h - (s - 4 * h), h, -1, 0];
@@ -497,11 +502,11 @@ function perim(s) {
 }
 function spawnPed(lot, far) {
   lot = lot || pick(lots);
-  const p = { mesh: M.makePerson(), lot, s: rand(0, PER), dir: Math.random() < 0.5 ? 1 : -1, speed: rand(1.2, 1.8), state: 'walk', t: 0, x: 0, z: 0, fallT: 0 };
+  const p = { mesh: M.makePerson(), lot, s: rand(0, 8 * (lot.h || PH)), dir: Math.random() < 0.5 ? 1 : -1, speed: rand(1.2, 1.8), state: 'walk', t: 0, x: 0, z: 0, fallT: 0 };
   scene.add(p.mesh); peds.push(p); placePed(p, 0); return p;
 }
 function placePed(p, dt) {
-  const [lx, lz, dx, dz] = perim(p.s);
+  const [lx, lz, dx, dz] = perim(p.s, p.lot.h);
   p.x = p.lot.cx + lx; p.z = p.lot.cz + lz;
   p.mesh.position.set(p.x, 0.2, p.z);
   const h = headingOf(dx * p.dir, dz * p.dir); p.mesh.rotation.y += wrapA(h - p.mesh.rotation.y) * Math.min(1, dt * 10 + (dt === 0 ? 1 : 0));
@@ -513,12 +518,32 @@ function updatePed(p, dt) {
     return;
   }
   if (p.state === 'flee') { p.t -= dt; if (p.t <= 0) { p.state = 'walk'; p.speed = rand(1.2, 1.8); } }
+  if (p.state === 'talk') { p.t -= dt; p.mesh.rotation.y += wrapA(headingOf(player.x - p.x, player.z - p.z) - p.mesh.rotation.y) * Math.min(1, dt * 8); M.animatePerson(p.mesh, 0, dt); if (p.t <= 0) p.state = 'walk'; return; }
+  if (p.state === 'walk' && !player.car && talkCD <= 0 && !p.talked && Math.abs(p.x - player.x) < 2.4 && Math.abs(p.z - player.z) < 2.4) {
+    p.state = 'talk'; p.t = 3; p.talked = true; talkCD = 5; showMsg('🗣️ "' + pick(npcLines(p.x, p.z)) + '"', 3); return;
+  }
   p.s += p.speed * p.dir * dt; placePed(p, dt); M.animatePerson(p.mesh, p.speed, dt);
+}
+let talkCD = 0;
+const NPC_LINES = {
+  any: ['Nice day in Vice Bay!', 'Watch where you\'re walking!', 'Have you seen my dog?', 'I swear the traffic gets worse every day.', 'You look like trouble.', 'Try the radio, Vice FM is the best.', 'I\'m late for work!', 'Hey, aren\'t you that guy from the news?', 'Don\'t talk to me, I\'m busy.', 'The cops are everywhere today.'],
+  beach: ['Surf\'s up!', 'Don\'t forget sunscreen.', 'The water\'s perfect today.'],
+  downtown: ['Rent up here is insane.', 'I work on the 40th floor. Great view!', 'Time is money, buddy.'],
+  swamp: ['Watch out for gators!', 'Best airboat rides in Florida, right here.', 'Mosquitoes are huge this year.'],
+  airport: ['My flight got delayed again.', 'Which way to Terminal B?', 'Welcome to Vice Bay!'],
+  town: ['Everybody knows everybody here.', 'Quiet little town, just how I like it.'],
+  city: ['First time in town?', 'The highway back to Vice Bay is that way.', 'This city never sleeps.']
+};
+function npcLines(x, z) {
+  let extra = [];
+  if (inRect(DT, x, z)) extra = NPC_LINES.downtown; else if (inRect(SWAMP, x, z)) extra = NPC_LINES.swamp; else if (inRect(AIR, x, z)) extra = NPC_LINES.airport;
+  else if (inRect(TOWN, x, z)) extra = NPC_LINES.town; else if (CITIES.some(c => c.inside(x, z))) extra = NPC_LINES.city; else if (x > 150) extra = NPC_LINES.beach;
+  return extra.concat(extra, NPC_LINES.any);
 }
 function scarePeds(x, z, r) {
   for (const p of peds) if (p.state !== 'dead' && Math.hypot(p.x - x, p.z - z) < r) {
     p.state = 'flee'; p.t = 6; p.speed = 5.5;
-    const [, , dx, dz] = perim(p.s); p.dir = ((p.x - x) * dx + (p.z - z) * dz) * 1 >= 0 ? 1 : -1;
+    const [, , dx, dz] = perim(p.s, p.lot.h); p.dir = ((p.x - x) * dx + (p.z - z) * dz) * 1 >= 0 ? 1 : -1;
   }
 }
 function killPed(p, byPlayer = true, crime = 1) {
@@ -1262,14 +1287,14 @@ function frame(nowMs) {
     }
   }
   vehicleCollisions();
-  for (const p of [...peds]) updatePed(p, dt);
+  talkCD -= dt; for (const p of [...peds]) updatePed(p, dt);
   // keep population near player
   const px = player.car ? player.car.x : player.x, pz = player.car ? player.car.z : player.z;
   for (const v of [...vehicles]) if (v.type === 'traffic' && Math.hypot(v.x - px, v.z - pz) > 170) removeVehicle(v);
   const trafficN = settings.quality === 'low' ? 12 : 18, pedN = settings.quality === 'low' ? 18 : 28;
   if (vehicles.filter(v => v.type === 'traffic').length < trafficN) spawnTraffic({ x: px, z: pz });
   for (const p of [...peds]) if (p.state !== 'dead' && Math.hypot(p.x - px, p.z - pz) > 130) { scene.remove(p.mesh); peds.splice(peds.indexOf(p), 1); }
-  if (peds.filter(p => p.state !== 'dead').length < pedN) { const nearLots = lots.filter(l => { const d = Math.hypot(l.cx - px, l.cz - pz); return d > 40 && d < 110; }); if (nearLots.length) spawnPed(pick(nearLots)); }
+  if (peds.filter(p => p.state !== 'dead').length < pedN) { const nearLots = lots.concat(npcLots).filter(l => { const d = Math.hypot(l.cx - px, l.cz - pz); return d > 40 && d < 110; }); if (nearLots.length) spawnPed(pick(nearLots)); }
   updateWanted(dt);
   tl.update(dt); swamp.update(dt); downtown.update(dt);
   if (player.car && player.car.kind !== 'heli' && player.car.kind !== 'boat' && !(player.car.y > 0.5)) {
