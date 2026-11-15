@@ -5,5 +5,5 @@ const s=new THREE.Scene();s.background=M.skyColor(0.5);s.fog=new THREE.Fog(0x87c
 const g=new THREE.Mesh(new THREE.PlaneGeometry(3000,3000),M.mat(0x8fc77a));g.rotation.x=-Math.PI/2;g.receiveShadow=true;s.add(g);
 const hw=buildInterstate(s,{number:95,name:'Vice Bay',points:[[0,0],[0,500],[250,800],[250,1400]]});
 const L=hw.lanes;[[0,60],[0,150],[2,100],[3,200],[1,300]].forEach(([li,d])=>{const p=L[li].points,a=p[0],b=p[1],dir=b.clone().sub(a).normalize();const c=M.makeCar();c.position.copy(a).addScaledVector(dir,d);c.rotation.y=Math.atan2(-dir.x,-dir.z);s.add(c);});
-const cam=new THREE.PerspectiveCamera(55,innerWidth/innerHeight,0.1,2000);cam.position.set(-30,22,-10);cam.lookAt(10,0,140);let f=0;(function loop(){r.render(s,cam);if(++f<30)requestAnimationFrame(loop);})();
+const cam=new THREE.PerspectiveCamera(55,innerWidth/innerHeight,0.1,2000);cam.position.set(location.hash?40:-30,location.hash?10:22,location.hash?260:-10);cam.lookAt(0,4,location.hash?120:140);let f=0;(function loop(){r.render(s,cam);if(++f<30)requestAnimationFrame(loop);})();
 </script></body></html>

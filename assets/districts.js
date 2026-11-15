@@ -44,18 +44,18 @@ export function buildAirport(scene, { x: ox = -2100, z: oz = 0, addCol = () => {
   const root = new THREE.Group(); root.position.set(ox, 0, oz); scene.add(root);
   const col = (x, z, w, d) => addCol(ox + x, oz + z, w, d), P = (x, z) => new THREE.Vector3(ox + x, 0, oz + z);
   const out = { root, vehicles: [], spawns: { pedestrians: [], traffic: [] }, pois: {}, streets: [] };
-  ground(root, 520, 360, 0x93b97a);
+  ground(root, 520, 360, 0x93b97a, 0, 0, -0.06);
   // Runways (east-west) with markings
   for (const rz of [-110, 110]) {
-    ground(root, 460, 30, 0x2f2f33, 0, rz, 0.01);
-    for (let x = -210; x <= 210; x += 24) ground(root, 12, 0.8, 0xffffff, x, rz, 0.012);
-    for (const ex of [-222, 222]) for (let k = -3; k <= 3; k++) ground(root, 10, 1.4, 0xffffff, ex, rz + k * 3.6, 0.012);
-    const num = sign(rz < 0 ? '09L' : '09R', '#2f2f33', '#fff', 14, 4); num.rotation.x = -Math.PI / 2; num.rotation.z = Math.PI / 2; num.position.set(-205, 0.02, rz); root.add(num);
+    ground(root, 460, 30, 0x2f2f33, 0, rz, 0.05);
+    for (let x = -210; x <= 210; x += 24) ground(root, 12, 0.8, 0xffffff, x, rz, 0.09);
+    for (const ex of [-222, 222]) for (let k = -3; k <= 3; k++) ground(root, 10, 1.4, 0xffffff, ex, rz + k * 3.6, 0.09);
+    const num = sign(rz < 0 ? '09L' : '09R', '#2f2f33', '#fff', 14, 4); num.rotation.x = -Math.PI / 2; num.rotation.z = Math.PI / 2; num.position.set(-205, 0.1, rz); root.add(num);
     for (let x = -228; x <= 228; x += 12) for (const s of [-1, 1]) root.add(box(0.4, 0.3, 0.4, 0xffffaa, x, 0.15, rz + s * 16, { emissive: 0xffee88, emissiveIntensity: 0.8 }));
   }
   // Taxiway + apron
-  ground(root, 400, 14, 0x3a3a40, 0, -60, 0.009); ground(root, 260, 70, 0x9a9a9e, 0, 0, 0.008);
-  for (const x of [-150, 150]) ground(root, 14, 190, 0x3a3a40, x, 0, 0.009);
+  ground(root, 400, 14, 0x3a3a40, 0, -60, 0.04); ground(root, 260, 70, 0x9a9a9e, 0, 0, 0.0);
+  for (const x of [-150, 150]) ground(root, 14, 190, 0x3a3a40, x, 0, 0.02);
   // Terminal
   const term = box(180, 16, 26, 0xe8f0ff, 0, 8, 50, { roughness: 0.4 }); root.add(term); col(0, 50, 180, 26);
   root.add(box(182, 1.2, 28, 0xbbbbbb, 0, 16.6, 50));
@@ -72,12 +72,12 @@ export function buildAirport(scene, { x: ox = -2100, z: oz = 0, addCol = () => {
   root.add(box(6, 40, 6, 0xdddddd, 120, 20, 40)); root.add(box(12, 6, 12, 0x223344, 120, 43, 40, { metalness: 0.8, roughness: 0.1 })); root.add(box(13, 1, 13, 0xffffff, 120, 46.5, 40)); col(120, 40, 6, 6);
   // Hangars + helipad
   [[-200, 40], [-200, -10]].forEach(([x, z]) => { root.add(box(36, 14, 30, 0xb0b8c0, x, 7, z)); root.add(box(26, 11, 0.2, 0x555b66, x + 18.1, 5.5, z).rotateY(Math.PI / 2)); col(x, z, 36, 30); });
-  ground(root, 20, 20, 0x555555, 200, -10, 0.011); const H = sign('H', '#555555', '#ffd23f', 12, 12); H.rotation.x = -Math.PI / 2; H.position.set(200, 0.02, -10); root.add(H);
+  ground(root, 20, 20, 0x555555, 200, -10, 0.03); const H = sign('H', '#555555', '#ffd23f', 12, 12); H.rotation.x = -Math.PI / 2; H.position.set(200, 0.08, -10); root.add(H);
   const heli = makeHelicopter(0xff7a1a); heli.position.set(200, 0, -10); root.add(heli); out.vehicles.push(heli);
   // Parking lot + access road (to the east, where I-10 arrives)
-  ground(root, 120, 60, 0x3a3a40, 0, 110 + 60, 0.009);
+  ground(root, 120, 60, 0x3a3a40, 0, 110 + 60, 0.03);
   for (let i = 0; i < 12; i++) { const c = makeCar(); c.position.set(-50 + i * 9, 0, 165 + (i % 2) * 12); root.add(c); if (i % 3 === 0) out.vehicles.push(c); }
-  for (let x = 140; x <= 260; x += 20) { const r = makeRoad(20, true); r.position.set(x, 0.01, 170); root.add(r); }
+  for (let x = 140; x <= 260; x += 20) { const r = makeRoad(20, true); r.position.set(x, 0.035, 170); root.add(r); }
   const bus = makeBus(0x003f87); bus.position.set(30, 0, 70); bus.rotation.y = Math.PI / 2; root.add(bus); out.vehicles.push(bus);
   for (let i = 0; i < 20; i++) out.spawns.pedestrians.push(P(-80 + i * 8, 70));
   out.pois = { terminal: P(0, 68), runway: P(-200, -110), hangar: P(-180, 40), helipad: P(200, -10), tower: P(120, 50), entrance: P(260, 170) };
@@ -97,10 +97,10 @@ export function buildSmallTown(scene, { x: ox = -150, z: oz = 1900, addCol = () 
   const root = new THREE.Group(); root.position.set(ox, 0, oz); scene.add(root);
   const col = (x, z, w, d) => addCol(ox + x, oz + z, w, d), P = (x, z) => new THREE.Vector3(ox + x, 0, oz + z);
   const out = { root, vehicles: [], spawns: { pedestrians: [], traffic: [] }, pois: {}, streets: [] };
-  ground(root, 320, 320, 0x8fc77a);
+  ground(root, 320, 320, 0x8fc77a, 0, 0, -0.06);
   // Main Street (N-S) + Orange Grove Rd (E-W)
   for (let z = -140; z <= 140; z += 20) { const r = makeRoad(20, false); r.position.set(0, 0.01, z); root.add(r); out.spawns.traffic.push({ pos: P(-3, z), dir: new THREE.Vector3(0, 0, 1) }); }
-  for (let x = -140; x <= 140; x += 20) { if (x === 0) continue; const r = makeRoad(20, true); r.position.set(x, 0.011, 0); root.add(r); }
+  for (let x = -140; x <= 140; x += 20) { if (x === 0) continue; const r = makeRoad(20, true); r.position.set(x, 0.03, 0); root.add(r); }
   // Main street shops
   const shops = [['DOTTIE\'S DINER', 0xff5e7e, '#ff5e7e', -24, -30, 'diner'], ['PALMETTO GENERAL', 0xffd6a5, '#a4161a', -24, -60, 'store'], ['SUNSET MOTEL', 0x9bf6ff, '#8a5cff', 26, -45, 'motel'], ['BAIT & TACKLE', 0xcaffbf, '#264653', -24, 30, 'bait'], ['SHERIFF', 0xbde0fe, '#1d3557', 26, 30, 'sheriff']];
   for (const [name, c, sc, x, z, key] of shops) {

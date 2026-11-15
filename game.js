@@ -7,6 +7,7 @@ import { buildPortCoral } from './assets/neighborhoods.js';
 import { TrafficLights } from './assets/trafficlights.js';
 import { buildFreeway } from './assets/freeway.js';
 import { buildInterstate } from './assets/interstates.js';
+import { buildAirport, buildSmallTown, makeJet } from './assets/districts.js';
 
 const $ = id => document.getElementById(id);
 const audio = new GameAudio();
@@ -60,8 +61,8 @@ const SHORE = 222, CAR_MAX_X = 224, FOOT_MAX_X = 320, EDGE = HALF + 16;
 const colliders = [];
 const addCol = (x, z, w, d, h = 12) => colliders.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2, h });
 
-const ground = new THREE.Mesh(new THREE.PlaneGeometry(4200, 4200), M.mat(0x7fbf7a));
-ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(5200, 5200), M.mat(0x7fbf7a));
+ground.position.y = -0.02; ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
 // beach + ocean
 const sand = new THREE.Mesh(new THREE.PlaneGeometry(SHORE - HALF + 10, 4200), M.mat(0xf2dca0));
 sand.rotation.x = -Math.PI / 2; sand.position.set((HALF + SHORE) / 2 + 2, 0.015, 0); sand.receiveShadow = true; scene.add(sand);
@@ -220,7 +221,12 @@ const HWS = [
   buildInterstate(scene, { number: 75, name: 'Port Coral', points: [[-150, FW.z0 - 11], [-150, -700], [100, -1000], [100, -1700]], addCol, startMile: 20 }),
   buildInterstate(scene, { number: 10, name: 'Vice Bay', points: [[-216, FW.z0 - 1], [-700, FW.z0 - 1], [-1000, -41], [-1700, -41]], addCol }),
 ];
-const inHw = (x, z) => HWS.some(h => h.nearest(x, z).dist < h.width / 2 + 2);
+// Mika's districts at the far ends of I-10 and I-95
+const airport = buildAirport(scene, { x: -1970, z: -211, addCol });
+const town = buildSmallTown(scene, { x: -150, z: 1850, addCol });
+const AIR = { minX: -2232, maxX: -1698, minZ: -393, maxZ: -29 }, TOWN = { minX: -312, maxX: 12, minZ: 1688, maxZ: 2012 };
+const inRect = (r, x, z) => x >= r.minX && x <= r.maxX && z >= r.minZ && z <= r.maxZ;
+const inHw = (x, z) => inRect(AIR, x, z) || inRect(TOWN, x, z) || HWS.some(h => h.nearest(x, z).dist < h.width / 2 + 2);
 const isLanes = [{ z: IS.z + 3.2, dir: 1 }, { z: IS.z + 9, dir: 1 }, { z: IS.z - 3.2, dir: -1 }, { z: IS.z - 9, dir: -1 }];
 // ---------- traffic lights at every grid crossing ----------
 const tl = new TrafficLights(scene);
@@ -279,6 +285,8 @@ function streetSign(text) {
   }));
 }
 function streetName(x, z) {
+  if (inRect(AIR, x, z)) { const s = airport.streetAt(x, z); return s ? s + ', Vice Bay Intl' : 'Vice Bay International Airport'; }
+  if (inRect(TOWN, x, z)) { const s = town.streetAt(x, z); return s ? s + ', Palmetto Springs' : 'Palmetto Springs'; }
   if (fw.onDeck(x, z) && fw.heightAt(x, z) > 0) return 'Vice Bay Expressway (VB-1 / I-195)';
   if (inFwZone(x, z) && x < -183 && z < 196) return 'VB-1 Ramp';
   for (const h of HWS) if (h.onRoad(x, z)) return `Interstate ${h.number}`;
@@ -301,7 +309,7 @@ function addVehicle(type, x, z, heading, opts = {}) {
   if (opts.sports && !opts.mesh) mesh.scale.set(1.05, 0.85, 1.1);
   mesh.position.set(x, 0, z); mesh.rotation.y = heading; scene.add(mesh);
   const ud = mesh.userData || {}, st = ud.stats || { speed: 1, accel: 1, grip: 1 }, kind = ud.type || 'car';
-  const KN = { sports: 'Vortex S', bike: 'Zephyr Bike', truck: 'Hauler Truck', bus: 'Metro Bus', boat: 'Wave Runner', heli: 'Skyhopper' };
+  const KN = { jet: 'Jetliner', sports: 'Vortex S', bike: 'Zephyr Bike', truck: 'Hauler Truck', bus: 'Metro Bus', boat: 'Wave Runner', heli: 'Skyhopper' };
   if (!opts.name && KN[kind]) opts.name = KN[kind];
   const v = { mesh, type, kind, grip: st.grip, y: 0, vy: 0, x, z, heading, speed: 0, health: kind === 'truck' || kind === 'bus' ? 160 : kind === 'bike' ? 70 : 100,
     maxSpeed: opts.sports ? 46 : police ? 36 : 30 * st.speed, accel: opts.sports ? 20 : 14 * st.accel,
@@ -313,6 +321,8 @@ function removeVehicle(v) { scene.remove(v.mesh); const i = vehicles.indexOf(v);
 const portMakers = [() => V.makeTruck(), () => V.makeTruck(0xd62828, 0x264653), () => V.makeBus(), () => V.makeMotorcycle(0xff2d6f), () => V.makeSportsCar(0xffd23f), () => M.makeCar()];
 const FIXED = [];
 port.vehicles.forEach((m, i) => { const wp = new THREE.Vector3(); m.getWorldPosition(wp); port.root.remove(m); FIXED.push({ x: wp.x, z: wp.z, h: m.rotation.y, make: portMakers[i] || (() => M.makeCar()), first: m, hauler: i === 1 }); });
+const distMake = m => { const t = m.userData?.type; return t === 'jet' ? () => makeJet(0x8a5cff) : t === 'heli' ? () => V.makeHelicopter(0xff7a1a) : t === 'bus' ? () => V.makeBus(0x003f87) : t === 'truck' ? () => V.makeTruck(0x2d6a4f, 0xff9f1c) : t === 'bike' ? () => V.makeMotorcycle(0x111111) : t === 'sports' ? () => V.makeSportsCar(0x19c3ff) : () => M.makeCar(); };
+for (const d of [airport, town]) d.vehicles.forEach(m => { const wp = new THREE.Vector3(); m.getWorldPosition(wp); d.root.remove(m); FIXED.push({ x: wp.x, z: wp.z, h: m.rotation.y, make: distMake(m), first: m }); });
 port.boats.forEach((m, i) => { const wp = new THREE.Vector3(); m.getWorldPosition(wp); port.root.remove(m); FIXED.push({ x: wp.x, z: wp.z, h: m.rotation.y + Math.PI, make: () => V.makeBoat(), first: m }); });
 FIXED.push({ x: SHORE + 10, z: 40, h: -Math.PI / 2, make: () => V.makeBoat(0xff2d6f, 0x111111) }, { x: SHORE + 10, z: -60, h: -Math.PI / 2, make: () => V.makeBoat(0x2ee59d, 0xffd23f) });
 for (const [x, z] of HELIPADS) FIXED.push({ x, z, h: 0, make: () => V.makeHelicopter(0xffd23f) });
@@ -984,13 +994,15 @@ function drawMinimap() {
   mm.fillStyle = '#6b6b72'; mm.fillRect(X(FW.x - FW.W / 2), Z(FW.z0), FW.W * sc, (FW.z1 - FW.z0) * sc); mm.fillRect(X(-215), Z(FW.z0 - 11), 150 * sc, 20 * sc); mm.fillRect(X(-215), Z(185), 47 * sc, 30 * sc);
   mm.fillStyle = '#4a5a8a'; mm.fillRect(X(IS.x0), Z(IS.z - IS.W / 2), (IS.x1 - IS.x0 + 28) * sc, IS.W * sc); mm.fillRect(X(-217), Z(196), 25 * sc, (IS.z - 196) * sc); for (const c of IS.cons) mm.fillRect(X(c - RW / 2), Z(180), RW * sc, (IS.z - 180) * sc);
   mm.strokeStyle = '#4a5a8a'; mm.lineCap = 'round'; for (const h of HWS) { mm.lineWidth = h.width * sc; mm.beginPath(); h.segs.forEach((g, i) => { if (!i) mm.moveTo(X(g.a.x), Z(g.a.z)); mm.lineTo(X(g.b.x), Z(g.b.z)); }); mm.stroke(); }
+  mm.fillStyle = '#8a8a90'; for (const rz of [-110, 110]) mm.fillRect(X(-1970 - 230), Z(-211 + rz - 15), 460 * sc, 30 * sc); mm.fillRect(X(-1970 - 130), Z(-211 - 35), 260 * sc, 70 * sc); mm.fillRect(X(-1840), Z(-51), 140 * sc, 20 * sc);
+  mm.fillRect(X(-160), Z(1700), 20 * sc, 300 * sc); mm.fillRect(X(-300), Z(1840), 300 * sc, 20 * sc);
   mm.fillStyle = '#999'; for (const l of lots) mm.fillRect(X(l.cx - LOT / 2), Z(l.cz - LOT / 2), LOT * sc, LOT * sc);
   mm.fillStyle = '#5fae5a'; for (const l of lots) if (l.park) mm.fillRect(X(l.cx - LOT / 2 + 3), Z(l.cz - LOT / 2 + 3), (LOT - 6) * sc, (LOT - 6) * sc);
   mm.fillStyle = '#d8d8d8'; for (const c of colliders) mm.fillRect(X(c.minX), Z(c.minZ), (c.maxX - c.minX) * sc, (c.maxZ - c.minZ) * sc);
   { const lab = (x, z, t) => { const lx = X(x), lz = Z(z); if (lx < 10 || lz < 10 || lx > MMS - 10 || lz > MMS - 10) return; const f = mmBig ? 15 : 10; mm.font = `bold ${f}px Arial`; mm.textAlign = 'center'; const w = mm.measureText(t).width + 8; mm.fillStyle = '#1d4fb8'; mm.fillRect(lx - w / 2, lz - f * 0.8, w, f * 1.4); mm.strokeStyle = '#fff'; mm.lineWidth = 1.5; mm.strokeRect(lx - w / 2, lz - f * 0.8, w, f * 1.4); mm.fillStyle = '#fff'; mm.fillText(t, lx, lz + f * 0.35); };
     for (const h of HWS) h.segs.forEach(g => { const n = Math.max(1, Math.round(g.len / (mmBig ? 400 : 160))); for (let k = 0; k < n; k++) { const t = (k + 0.5) / n; lab(g.a.x + (g.b.x - g.a.x) * t, g.a.z + (g.b.z - g.a.z) * t, 'I-' + h.number); } });
     lab((IS.x0 + IS.x1) / 2 - 40, IS.z, 'I-395'); lab(FW.x, -60, 'VB-1');
-    if (mmBig) { mm.font = 'bold 18px Arial'; mm.fillStyle = '#fff'; mm.textAlign = 'center'; mm.fillText('VICE BAY', X(0), Z(0)); mm.fillText('PORT CORAL', X(20), Z(-300)); } }
+    if (mmBig) { mm.font = 'bold 18px Arial'; mm.fillStyle = '#fff'; mm.textAlign = 'center'; mm.fillText('VICE BAY', X(0), Z(0)); mm.fillText('PORT CORAL', X(20), Z(-300)); mm.fillText('VICE BAY INTL ✈', X(-1970), Z(-260)); mm.fillText('PALMETTO SPRINGS', X(-150), Z(1830)); } }
   const dot = (x, z, col, r = 5, txt) => { if (mmBig) r *= 1.3; mm.fillStyle = col; mm.beginPath(); mm.arc(clamp(X(x), 8, MMS - 8), clamp(Z(z), 8, MMS - 8), r, 0, 7); mm.fill(); if (txt) { mm.fillStyle = '#fff'; mm.font = 'bold 11px Arial'; mm.textAlign = 'center'; mm.fillText(txt, clamp(X(x), 8, MMS - 8), clamp(Z(z), 8, MMS - 8) + 4); } };
   const tgt = state.mission?.target;
   if (tgt) { const r = route(px, pz, tgt.x, tgt.z); if (tgt.z < -EDGE || pz < -EDGE) { r.length = 0; if (pz < -EDGE && tgt.z > -EDGE) { r.push([px, pz], [0, pz], [0, -180], ...route(0, -180, tgt.x, tgt.z)); } else if (tgt.z < -EDGE && pz > -EDGE) { r.push(...route(px, pz, 0, -180), [0, -180], [0, tgt.z], [tgt.x, tgt.z]); } else r.push([px, pz], [0, pz], [0, tgt.z], [tgt.x, tgt.z]); } mm.strokeStyle = '#ff5e7e'; mm.lineWidth = 5; mm.beginPath(); r.forEach(([x, z], i) => i ? mm.lineTo(X(x), Z(z)) : mm.moveTo(X(x), Z(z))); mm.stroke(); }

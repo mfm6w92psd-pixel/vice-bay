@@ -15,10 +15,10 @@ function box(w, h, d, color, x, y, z, opts) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(color, opts));
   m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; return m;
 }
-function canvasPlane(draw, cw, ch, w, h) {
+function canvasPlane(draw, cw, ch, w, h, side = THREE.DoubleSide) {
   const c = document.createElement('canvas'); c.width = cw; c.height = ch; draw(c.getContext('2d'), cw, ch);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
-  return new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: t, side: THREE.DoubleSide, transparent: true }));
+  return new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: t, side, transparent: true }));
 }
 export function makeShield(num, size = 2.4) {
   return canvasPlane((x, w, h) => {
@@ -31,19 +31,22 @@ export function makeShield(num, size = 2.4) {
   }, 256, 256, size, size);
 }
 function greenSign(lines, w = 9, h = 3, shieldNum) {
-  return canvasPlane((x, cw, ch) => {
+  const m = canvasPlane((x, cw, ch) => {
     x.fillStyle = '#0b6b3a'; x.fillRect(0, 0, cw, ch); x.strokeStyle = '#fff'; x.lineWidth = 6; x.strokeRect(8, 8, cw - 16, ch - 16);
     x.fillStyle = '#fff'; x.font = 'bold 46px sans-serif'; x.textAlign = 'center';
     lines.forEach((t, i) => x.fillText(t, cw / 2 + (shieldNum && i === 0 ? 40 : 0), 70 + i * 56));
     if (shieldNum) { x.fillStyle = '#003f87'; x.fillRect(30, 26, 70, 60); x.fillStyle = '#c8102e'; x.fillRect(30, 26, 70, 16); x.fillStyle = '#fff'; x.font = 'bold 30px sans-serif'; x.fillText(String(shieldNum), 65, 80); }
-  }, 512, 170, w, h);
+  }, 512, 170, w, h, THREE.FrontSide);
+  const g = new THREE.Group(); g.add(m); g.add(box(w + 0.1, h + 0.1, 0.04, 0x555555, 0, 0, -0.03)); return g;
 }
 const ADS = [['SUNNY\'S TACOS', 'Exit 4 · Open 24h', '#ff7a1a'], ['VICE BAY FM', 'The 80s never ended', '#ff2d6f'], ['GATOR PARK', 'Next exit, 12 km', '#2ee59d'], ['FLAMINGO MOTEL', 'Color TV · Pool', '#f15bb5'], ['MAX DRIVE', 'Insurance? Never heard of it', '#19c3ff']];
 function billboard(i) {
   const [a, b, c] = ADS[i % ADS.length], g = new THREE.Group();
   for (const s of [-1, 1]) g.add(box(0.4, 7, 0.4, 0x555555, s * 3.5, 3.5, 0));
-  const p = canvasPlane((x, w, h) => { x.fillStyle = c; x.fillRect(0, 0, w, h); x.fillStyle = '#fff'; x.textAlign = 'center'; x.font = 'bold 64px sans-serif'; x.fillText(a, w / 2, 100); x.font = '36px sans-serif'; x.fillText(b, w / 2, 170); }, 512, 220, 10, 4.3);
-  p.position.y = 8; g.add(p); return g;
+  const p = canvasPlane((x, w, h) => { x.fillStyle = c; x.fillRect(0, 0, w, h); x.fillStyle = '#fff'; x.textAlign = 'center'; x.font = 'bold 64px sans-serif'; x.fillText(a, w / 2, 100); x.font = '36px sans-serif'; x.fillText(b, w / 2, 170); }, 512, 220, 10, 4.3, THREE.FrontSide);
+  p.position.y = 8; g.add(p);
+  const back = p.clone(); back.rotation.y = Math.PI; back.position.z = -0.05; g.add(back);
+  g.add(box(10.2, 4.5, 0.04, 0x444444, 0, 8, -0.025)); return g;
 }
 let roadTex;
 function roadTexture() {
