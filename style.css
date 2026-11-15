@@ -71,3 +71,11 @@ html,body{margin:0;height:100%;overflow:hidden;background:#000;font-family:-appl
 #mmctl button{width:44px;height:44px;border-radius:10px;border:2px solid #fff;background:rgba(20,24,40,.85);color:#fff;font:bold 20px Arial;padding:0}
 #mmctl #mmClear{font-size:13px}
 #wpdist{margin-top:4px;color:#ff7ac0;font:bold 14px Arial;text-shadow:0 1px 3px #000;display:none;pointer-events:none}
+
+#mp input{font-size:18px;padding:9px 12px;border-radius:10px;border:2px solid #fff6;background:#0008;color:#fff;text-align:center;width:220px}
+#mp .mpRow{display:flex;gap:8px;align-items:center}
+#mp #mpCode{width:110px;letter-spacing:6px;font-weight:800}
+#mp .mpRow .menuBtn{min-width:100px}
+#mpStatus{font-weight:700;opacity:.9;margin:4px 0}
+#mpStatus.on{color:#2ee59d}#mpStatus.off{color:#ffb3c1}#mpStatus.busy{color:#ffd23f}
+#mp .hint{max-width:420px;text-align:center}

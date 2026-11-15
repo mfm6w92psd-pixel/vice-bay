@@ -54,6 +54,7 @@
   <p class="sub">Stage 1 · Playable city prototype</p>
   <button id="btnNew" class="menuBtn">New Game</button>
   <button id="btnContinue" class="menuBtn">Continue</button>
+  <button class="menuBtn" data-act="mp">👥 Multiplayer</button>
   <p class="hint">Play in landscape. For full screen on iPhone: Share → Add to Home Screen.</p>
 </div>
 
@@ -62,10 +63,22 @@
   <button class="menuBtn" data-act="resume">Resume</button>
   <button class="menuBtn" data-act="save">Save Game</button>
   <button class="menuBtn" data-act="load">Load Game</button>
+  <button class="menuBtn" data-act="mp">👥 Multiplayer</button>
   <button class="menuBtn" data-act="settings">Settings</button>
   <button class="menuBtn" data-act="help">Controls</button>
   <button class="menuBtn" data-act="missions">Missions</button>
   <button class="menuBtn danger" data-act="restart">Restart (new game)</button>
+</div>
+
+<div id="mp" class="screen hidden">
+  <h2>👥 Multiplayer</h2>
+  <p class="hint">One player hosts and shares the 4-letter code. Friends type it in to join and you'll see each other around Vice Bay.</p>
+  <input id="mpName" maxlength="12" placeholder="Your name" autocomplete="off">
+  <button id="mpHost" class="menuBtn">Host a game</button>
+  <div class="mpRow"><input id="mpCode" maxlength="4" placeholder="CODE" autocomplete="off" autocapitalize="characters"><button id="mpJoin" class="menuBtn">Join</button></div>
+  <p id="mpStatus">Not connected</p>
+  <button id="mpLeave" class="menuBtn danger">Leave</button>
+  <button id="mpBack" class="menuBtn">Back</button>
 </div>
 
 <div id="settings" class="screen hidden">
@@ -99,6 +112,7 @@
 
 <div id="rotate" class="screen"><p>↻ Rotate your phone to landscape</p></div>
 
+<script src="./vendor/peerjs.min.js"></script>
 <script type="module" src="game.js"></script>
 </body>
 </html>

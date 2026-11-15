@@ -1,0 +1,26 @@
+<!doctype html><html><head><script type="importmap">{"imports":{"three":"../vendor/three.module.js"}}</script></head><body><pre id=o>running</pre><script>
+// in-memory Peer mock
+const reg={};let n=0;
+class Em{constructor(){this.h={}}on(e,f){(this.h[e]||=[]).push(f)}emit(e,...a){(this.h[e]||[]).forEach(f=>f(...a))}}
+class Conn extends Em{constructor(peer){super();this.peer=peer;this.open=false}send(d){const o=this.other;setTimeout(()=>o.emit('data',JSON.parse(JSON.stringify(d))),5)}close(){if(!this.open)return;this.open=false;this.other.open=false;setTimeout(()=>{this.emit('close');this.other.emit('close')},5)}}
+window.Peer=class extends Em{constructor(id){super();this.id=typeof id==='string'?id:'p'+(++n);this.conns=[];setTimeout(()=>{if(reg[this.id]){this.emit('error',{type:'unavailable-id'});return}reg[this.id]=this;this.emit('open',this.id)},5)}
+ connect(id){const a=new Conn(id),t=reg[id];if(!t){setTimeout(()=>this.emit('error',{type:'peer-unavailable'}),5);return a}const b=new Conn(this.id);a.other=b;b.other=a;this.conns.push(a);t.conns.push(b);setTimeout(()=>{t.emit('connection',b);setTimeout(()=>{a.open=b.open=true;b.emit('open');a.emit('open')},5)},5);return a}
+ destroy(){this.destroyed=true;delete reg[this.id];this.conns.forEach(c=>c.close())}reconnect(){}};
+</script><script type="module">
+import * as THREE from 'three'; import {Net, RemotePlayers} from './net.js';
+const log=[];const L=m=>{log.push(m);document.getElementById('o').textContent=log.join('\n');};const W=t=>new Promise(r=>setTimeout(r,t));
+try{
+const A=new Net(), B=new Net(), C=new Net(); A.on('join',p=>L('A sees join '+p.name)); B.on('join',p=>L('B sees join '+p.name)); C.on('join',p=>L('C sees join '+p.name)); A.on('event',(p,e)=>L('A event '+e.type+' from '+p.name));C.on('event',(p,e)=>L('C event '+e.type+' from '+p.name));A.on('leave',p=>L('A sees leave '+p.name));C.on('leave',p=>L('C sees leave '+p.name));
+const code=await A.host('Steven'); L('code '+code);
+await B.join(code,'Alex'); L('B joined'); await C.join(code,'Sam'); L('C joined');
+try{await new Net().join('ZZZZZ','x')}catch(e){L('bad code -> '+e.message)}
+for(let i=1;i<=5;i++){A._last=B._last=C._last=0;A.sendState({x:i,z:5,heading:0,speed:3,moving:true});B.sendState({x:-i,z:9,heading:1,speed:0,car:{type:'car',color:0xff0000}});await W(30)}
+B.sendEvent({type:'horn'}); await W(60);
+const sc=new THREE.Scene(); const rp=new RemotePlayers(sc,C); rp.update(0.1);
+L('C sees '+[...C.players.values()].map(p=>p.name+'@'+(p.state&&p.state.x)).join(', ')+' | meshes '+rp.map.size+' | Alex in car: '+!!rp.map.get(B.id).car);
+L('A sees '+[...A.players.values()].map(p=>p.name+'@'+(p.state&&p.state.x)).join(', '));
+B.leave(); await W(80); L('after Alex leaves: A has '+A.players.size+', C has '+C.players.size+', C meshes '+rp.map.size);
+A.leave(); await W(80); L('after host leaves: C has '+C.players.size);
+L('DONE');
+}catch(e){L('FAIL '+e.stack)}
+</script></body></html>

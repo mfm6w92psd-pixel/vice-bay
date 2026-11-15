@@ -11,6 +11,7 @@ import { buildAirport, buildSmallTown, makeJet } from './assets/districts.js';
 import { buildSwamp, buildDowntown, makeAirboat } from './assets/regions.js';
 import { buildCity } from './assets/cities.js';
 import { setupGraphics } from './assets/graphics.js';
+import { createNet } from './net.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -862,7 +863,7 @@ function updateFoot(dt) {
   let mx = f[0] * input.my + r[0] * input.mx, mz = f[1] * input.my + r[1] * input.mx; const ml = Math.hypot(mx, mz);
   player.swim = inWater(player.x, player.z) && (player.x > SHORE + 4 || player.y < 0.5) && !(player.x > port.waterRect.minX - 1 && player.x < port.waterRect.minX + 2 && player.y >= 0);
   const pox = player.x, poz = player.z;
-  const spd = (player.swim ? 2.5 : input.sprint ? 8 : 4.2) * Math.min(1, ml);
+  const spd = (player.swim ? 2.5 : input.sprint ? 8 : 4.2) * Math.min(1, ml); player.spd = spd;
   if (ml > 0.05) { mx /= ml; mz /= ml; player.heading += wrapA(headingOf(mx, mz) - player.heading) * Math.min(1, dt * 12); }
   const nx = player.x + mx * spd * dt, nz = player.z + mz * spd * dt;
   player.x = nx; player.z = nz;
@@ -1144,6 +1145,12 @@ function drawMinimap() {
     mm.fillStyle = '#ff2d9a'; mm.strokeStyle = '#fff'; mm.lineWidth = 2; mm.beginPath(); mm.arc(wx, wz - 10 * k, 7 * k, Math.PI * 0.85, Math.PI * 2.15); mm.lineTo(wx, wz); mm.closePath(); mm.fill(); mm.stroke();
     mm.fillStyle = '#fff'; mm.beginPath(); mm.arc(wx, wz - 10 * k, 2.6 * k, 0, 7); mm.fill();
   }
+  // other players
+  for (const r of remotes.values()) {
+    const rx = X(r.x), rz = Z(r.z); mm.fillStyle = '#' + r.color.toString(16).padStart(6, '0'); mm.strokeStyle = '#fff'; mm.lineWidth = 2;
+    mm.beginPath(); mm.arc(rx, rz, mmBig ? 8 : 6, 0, Math.PI * 2); mm.fill(); mm.stroke();
+    if (mmBig) { mm.fillStyle = '#fff'; mm.font = 'bold 13px sans-serif'; mm.textAlign = 'center'; mm.fillText(r.name, rx, rz - 12); }
+  }
   // player arrow
   const h = player.car ? player.car.heading : player.heading;
   mm.save(); mm.translate(X(px), Z(pz)); mm.rotate(-h); if (mmBig) mm.scale(1.5, 1.5); mm.fillStyle = '#fff'; mm.strokeStyle = '#000'; mm.lineWidth = 2;
@@ -1271,7 +1278,7 @@ function frame(nowMs) {
   }
   updateFwTraffic(dt); updateIsTraffic(dt); updateHwTraffic(dt);
   if (state.mission && state.mission._started && !cutLines) state.mission.def.update(state.mission, dt);
-  updateInteractions(dt); updateEnv(dt); updateFx(dt); updateCamera(dt);
+  updateInteractions(dt); updateRemotes(dt); updateEnv(dt); updateFx(dt); updateCamera(dt);
   if (msgTimer > 0) { msgTimer -= dt; if (msgTimer <= 0) $('msg').classList.remove('show'); }
   if (bigTimer > 0) { bigTimer -= dt; if (bigTimer <= 0) $('big').classList.remove('show'); }
   if (state.now - lastHud > 0.1) { lastHud = state.now; updateHud(); drawMinimap(); }
@@ -1279,7 +1286,7 @@ function frame(nowMs) {
 }
 
 // ---------- menus ----------
-function show(id) { for (const s of ['pause', 'settings', 'help', 'missionList']) $(s).classList.toggle('hidden', s !== id); }
+function show(id) { for (const s of ['pause', 'settings', 'help', 'missionList', 'mp']) $(s).classList.toggle('hidden', s !== id); }
 function togglePause(force) {
   if (!state.started) return;
   state.paused = force ?? !state.paused; show(state.paused ? 'pause' : null);
@@ -1298,6 +1305,7 @@ document.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click',
   else if (a === 'missions') { $('missionItems').innerHTML = MISSIONS.map(m => `<p>${state.done.includes(m.id) ? '✅' : '⭕'} <b>${m.name}</b> — $${m.reward}</p>`).join('') + '<p style="opacity:.7">Yellow markers on the map start missions.</p>'; show('missionList'); }
   else if (a === 'restart') { if (confirm('Start a new game? Unsaved progress is lost.')) { newGame(); togglePause(false); } }
   else if (a === 'back') show('pause');
+  else if (a === 'mp') { $('mpName').value = settings.mpName || ''; if (state.started) show('mp'); else $('mp').classList.remove('hidden'); }
 }));
 function syncSettingsUI() {
   $('setQuality').value = settings.quality; $('setVolume').value = settings.volume; $('setRadio').value = settings.radio ? '1' : '0';
@@ -1328,6 +1336,62 @@ for (let i = 0; i < 14; i++) spawnPickup();
 for (let i = 0; i < 16; i++) spawnTraffic(null);
 for (let i = 0; i < 24; i++) spawnPed();
 player.x = POI.safe.x; player.z = POI.safe.z - 1;
+// ---------- multiplayer (net.js) ----------
+const remotes = new Map();
+const MP_COLORS = [0xff2d6f, 0x19c3ff, 0xffd23f, 0x2ee59d, 0x8a5cff, 0xff7a1a];
+function mpMakeMesh(kind, color) {
+  let m;
+  if (kind === 'foot') m = M.makePerson({ shirt: color });
+  else if (kind === 'sports') m = V.makeSportsCar(color); else if (kind === 'bike') m = V.makeMotorcycle(color);
+  else if (kind === 'truck') m = V.makeTruck(color); else if (kind === 'bus') m = V.makeBus(color);
+  else if (kind === 'boat') m = V.makeBoat(color); else if (kind === 'heli') m = V.makeHelicopter(color);
+  else if (kind === 'jet') m = makeJet(color); else m = M.makeCar(color);
+  if (gfx) gfx.upgrade(m); return m;
+}
+function mpLabel(text, color) {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 64; const g = c.getContext('2d');
+  g.font = 'bold 38px sans-serif'; g.textAlign = 'center'; g.lineWidth = 7; g.strokeStyle = '#000'; g.strokeText(text, 128, 46);
+  g.fillStyle = '#' + color.toString(16).padStart(6, '0'); g.fillText(text, 128, 46);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false, fog: false })); sp.scale.set(4, 1, 1); sp.renderOrder = 10; return sp;
+}
+function mpOnState(m) {
+  if (typeof m.x !== 'number' || typeof m.z !== 'number') return;
+  let r = remotes.get(m.id);
+  const name = String(m.n || 'Player').slice(0, 12), color = MP_COLORS[(m.c | 0) % MP_COLORS.length], kind = String(m.k || 'foot');
+  if (!r) { r = { x: m.x, z: m.z, y: m.y || 0, h: m.h || 0, name, color, kind: null, mesh: null, label: mpLabel(name, color) }; scene.add(r.label); remotes.set(m.id, r); showMsg('👋 ' + name + ' joined'); }
+  if (r.kind !== kind) { if (r.mesh) scene.remove(r.mesh); r.kind = kind; r.mesh = mpMakeMesh(kind, color); scene.add(r.mesh); }
+  r.tx = m.x; r.tz = m.z; r.ty = m.y || 0; r.th = m.h || 0; r.sp = m.sp || 0; r.last = performance.now();
+}
+function mpRemove(id) { const r = remotes.get(id); if (!r) return; scene.remove(r.label); if (r.mesh) scene.remove(r.mesh); remotes.delete(id); showMsg('👋 ' + r.name + ' left'); }
+function updateRemotes(dt) {
+  const now = performance.now(), k = Math.min(1, dt * 10);
+  for (const [id, r] of remotes) {
+    if (now - r.last > 8000) { mpRemove(id); continue; }
+    r.x += (r.tx - r.x) * k; r.z += (r.tz - r.z) * k; r.y += (r.ty - r.y) * k;
+    let d = r.th - r.h; d = Math.atan2(Math.sin(d), Math.cos(d)); r.h += d * k;
+    r.mesh.position.set(r.x, r.y, r.z); r.mesh.rotation.y = r.h;
+    if (r.kind === 'foot') M.animatePerson(r.mesh, r.sp, dt);
+    r.label.position.set(r.x, r.y + (r.kind === 'foot' ? 2.6 : r.kind === 'bus' || r.kind === 'truck' || r.kind === 'jet' ? 5.5 : 3.2), r.z);
+  }
+}
+const net = createNet({ onState: mpOnState, onLeave: mpRemove, onStatus: (t, st) => { $('mpStatus').textContent = t; $('mpStatus').className = st; $('mpLeave').style.display = net && net.active ? '' : 'none'; } });
+let mpColor = Math.random() * MP_COLORS.length | 0;
+setInterval(() => {
+  if (!net.active || !state.started) return;
+  const v = player.car;
+  net.broadcast({ n: settings.mpName || 'Player', c: mpColor, x: +(v ? v.x : player.x).toFixed(2), z: +(v ? v.z : player.z).toFixed(2), y: +(v ? v.y || 0 : player.y || 0).toFixed(2),
+    h: +(v ? v.heading : player.heading).toFixed(3), k: v ? v.kind : 'foot', sp: +(v ? Math.abs(v.speed) : (player.spd || 0)).toFixed(1) });
+}, 100);
+const mpSaveName = () => { settings.mpName = $('mpName').value.trim().slice(0, 12); saveSettings(); };
+$('mpHost').onclick = () => { audio.click(); mpSaveName(); net.hostGame(); };
+$('mpJoin').onclick = () => { audio.click(); mpSaveName(); net.join($('mpCode').value); };
+$('mpCode').addEventListener('input', e => { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z]/g, ''); });
+$('mpLeave').onclick = () => { audio.click(); net.leave(); for (const id of [...remotes.keys()]) mpRemove(id); $('mpStatus').textContent = 'Not connected'; $('mpLeave').style.display = 'none'; };
+$('mpBack').onclick = () => { audio.click(); if (state.started) show('pause'); else $('mp').classList.add('hidden'); };
+$('mpLeave').style.display = 'none';
+addEventListener('pagehide', () => net.leave());
+window.__mp = { net, remotes };
+
 refreshMissionMarkers(); applyQuality(); applyControls();
 gfx = setupGraphics(renderer, scene, camera, { quality: settings.quality === 'ultra' ? 'high' : settings.quality }); gfx.upgrade(scene); applyQuality();
 camera.position.set(player.x + 30, 40, player.z + 50); camera.lookAt(player.x, 0, player.z);
