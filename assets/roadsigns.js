@@ -125,6 +125,8 @@ export function buildRoadSigns(scene, { highways, places = [], cityRadius = 450 
   const near = (p, r = cityRadius) => { let best = null, bd = r; for (const c of places) { const d = Math.hypot(c.x - p.x, c.z - p.z); if (d < bd) { bd = d; best = c; } } return best; };
   const nearestAny = p => near(p, Infinity);
   let count = 0;
+  // never stand a sign on a road surface (bends and junctions put one highway's shoulder on another)
+  const onRoad = (x, z) => highways.some(g => g.segs?.length && g.nearest(x, z).dist < (g.width || 30) / 2 + 1.5);
   for (const h of highways) {
     const segs = h.segs; if (!segs?.length) continue;
     const W = h.width || 30, side = W / 2 + 3, limit = h.us ? 55 : 65;
@@ -135,7 +137,7 @@ export function buildRoadSigns(scene, { highways, places = [], cityRadius = 450 
     const along = places.map(c => { const n = h.nearest(c.x, c.z); let acc = 0; for (let i = 0; i < n.segIndex; i++) acc += segs[i].len; return { c, dist: n.dist, pos: acc + n.t }; })
       .filter(o => o.dist < cityRadius);
     const at = (s, d, off) => s.a.clone().addScaledVector(s.dir, d).addScaledVector(s.right, off);
-    const put = (obj, p, ang) => { obj.position.set(p.x, 0, p.z); obj.rotation.y = ang; root.add(obj); count++; };
+    const put = (obj, p, ang) => { if (onRoad(p.x, p.z)) return; obj.position.set(p.x, 0, p.z); obj.rotation.y = ang; root.add(obj); count++; };
     let acc = 0;
     segs.forEach((s, i) => {
       if (s.len > 260) {
@@ -220,6 +222,7 @@ export function buildExitSigns(scene, { highways, interchanges = [], places = []
   const root = new THREE.Group(); root.name = 'exitsigns'; scene.add(root);
   const nearestPlace = (x, z) => { let b = null, bd = Infinity; for (const c of places) { const d = Math.hypot(c.x - x, c.z - z); if (d < bd) { bd = d; b = c; } } return b; };
   let count = 0;
+  const onRoad = (x, z) => highways.some(g => g.segs?.length && g.nearest(x, z).dist < (g.width || 30) / 2 + 1.5);
   const posOf = (h, n) => { let acc = 0; for (let i = 0; i < n.segIndex; i++) acc += h.segs[i].len; return acc + n.t; };
   const pointAt = (h, pos) => { let acc = 0; for (const s of h.segs) { if (pos <= acc + s.len || s === h.segs[h.segs.length - 1]) return { s, d: Math.max(0, Math.min(s.len, pos - acc)) }; acc += s.len; } };
   for (const h of highways) {
@@ -256,12 +259,12 @@ export function buildExitSigns(scene, { highways, interchanges = [], places = []
           if (exits.some(o => o !== x && (o.pos - pp) * dir > 0 && (x.pos - o.pos) * dir > 0)) continue;   // another exit in between: skip, avoids clutter
           const { s, d } = pointAt(h, pp), p = s.a.clone().addScaledVector(s.dir, d).addScaledVector(s.right, -dir * side);
           const mi = ad / UNITS_PER_MILE, txt = mi >= 1.5 ? `${Math.round(mi)} MILES` : '1 MILE';
-          const sg = exitSign(num, x.lines.filter(Boolean), txt); sg.position.set(p.x, 0, p.z); sg.rotation.y = s.ang + (dir === 1 ? Math.PI : 0); root.add(sg); count++;
+          if (onRoad(p.x, p.z)) continue; const sg = exitSign(num, x.lines.filter(Boolean), txt); sg.position.set(p.x, 0, p.z); sg.rotation.y = s.ang + (dir === 1 ? Math.PI : 0); root.add(sg); count++;
         }
         if (!x.ic) {
           const pp = x.pos - dir * 45; if (pp < 20 || pp > total - 20) continue;
           const { s, d } = pointAt(h, pp), p = s.a.clone().addScaledVector(s.dir, d).addScaledVector(s.right, -dir * side);
-          const gs = goreSign(num, x.sideG * dir > 0);   // +right is the traveller's left for forward traffic gs.position.set(p.x, 0, p.z); gs.rotation.y = s.ang + (dir === 1 ? Math.PI : 0); root.add(gs); count++;
+          if (onRoad(p.x, p.z)) continue; const gs = goreSign(num, x.sideG * dir > 0);   // +right is the traveller's left for forward traffic gs.position.set(p.x, 0, p.z); gs.rotation.y = s.ang + (dir === 1 ? Math.PI : 0); root.add(gs); count++;
         }
       }
     }
