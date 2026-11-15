@@ -12,6 +12,7 @@ import { buildSwamp, buildDowntown, makeAirboat } from './assets/regions.js';
 import { buildCity } from './assets/cities.js';
 import { setupGraphics } from './assets/graphics.js';
 import { createNet } from './net.js';
+import { makeNPC, pickNPCType, animateNPC, setNPCPanic } from './assets/npcs.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -500,9 +501,20 @@ function perim(s, h = PH) {
   if (s < 6 * h) return [h - (s - 4 * h), h, -1, 0];
   return [-h, h - (s - 6 * h), 0, -1];
 }
+function npcArea(x, z) {
+  if (inRect(DT, x, z)) return 'downtown'; if (inRect(SWAMP, x, z)) return 'swamp'; if (inRect(TOWN, x, z)) return 'town';
+  if (CITIES.some(c => c.inside(x, z)) || inRect(AIR, x, z)) return 'city'; if (x > 150) return 'beach'; return 'city';
+}
+let callCD = 0;
+function dropCash(x, z, amt) {
+  if (!amt) return; const m = new THREE.Mesh(new THREE.OctahedronGeometry(0.5), new THREE.MeshStandardMaterial({ color: PK.cash[0], emissive: PK.cash[0], emissiveIntensity: 0.6 }));
+  m.position.set(x, 1, z); scene.add(m); pickups.push({ m, kind: 'cash', x, z, amount: amt });
+}
 function spawnPed(lot, far) {
   lot = lot || pick(lots);
-  const p = { mesh: M.makePerson(), lot, s: rand(0, 8 * (lot.h || PH)), dir: Math.random() < 0.5 ? 1 : -1, speed: rand(1.2, 1.8), state: 'walk', t: 0, x: 0, z: 0, fallT: 0 };
+  const mesh = makeNPC(pickNPCType(npcArea(lot.cx, lot.cz))), info = mesh.userData.npc || {};
+  const p = { mesh, info, lot, s: rand(0, 8 * (lot.h || PH)), dir: Math.random() < 0.5 ? 1 : -1, speed: info.speed || rand(1.2, 1.8), state: 'walk', t: 0, x: 0, z: 0, fallT: 0, callT: 0 };
+  if (gfx) gfx.upgrade(mesh);
   scene.add(p.mesh); peds.push(p); placePed(p, 0); return p;
 }
 function placePed(p, dt) {
@@ -517,12 +529,19 @@ function updatePed(p, dt) {
     if (p.t <= 0) { const d = Math.hypot(p.x - player.x, p.z - player.z); if (d > 50) { scene.remove(p.mesh); peds.splice(peds.indexOf(p), 1); } }
     return;
   }
-  if (p.state === 'flee') { p.t -= dt; if (p.t <= 0) { p.state = 'walk'; p.speed = rand(1.2, 1.8); } }
-  if (p.state === 'talk') { p.t -= dt; p.mesh.rotation.y += wrapA(headingOf(player.x - p.x, player.z - p.z) - p.mesh.rotation.y) * Math.min(1, dt * 8); M.animatePerson(p.mesh, 0, dt); if (p.t <= 0) p.state = 'walk'; return; }
+  if (p.callT > 0) { p.callT -= dt; if (p.callT <= 0 && callCD <= 0) { callCD = 25; addWanted(1, true); showMsg('📞 Someone called the cops!'); } }
+  if (p.state === 'flee') { p.t -= dt; if (p.t <= 0) { p.state = 'walk'; p.speed = p.info.speed || rand(1.2, 1.8); setNPCPanic(p.mesh, false); } }
+  if (p.state === 'fight') {
+    p.t -= dt; p.hitT = (p.hitT || 0) - dt; const d = Math.hypot(player.x - p.x, player.z - p.z);
+    p.mesh.rotation.y += wrapA(headingOf(player.x - p.x, player.z - p.z) - p.mesh.rotation.y) * Math.min(1, dt * 8); animateNPC(p.mesh, d < 1.8 ? 3 : 0, dt);
+    if (d < 1.8 && !player.car && p.hitT <= 0) { p.hitT = 1; hurt(6); audio.crash(0.15); }
+    if (p.t <= 0 || player.car || d > 30) p.state = 'walk'; return;
+  }
+  if (p.state === 'talk') { p.t -= dt; p.mesh.rotation.y += wrapA(headingOf(player.x - p.x, player.z - p.z) - p.mesh.rotation.y) * Math.min(1, dt * 8); animateNPC(p.mesh, 0, dt); if (p.t <= 0) p.state = 'walk'; return; }
   if (p.state === 'walk' && !player.car && talkCD <= 0 && !p.talked && Math.abs(p.x - player.x) < 2.4 && Math.abs(p.z - player.z) < 2.4) {
     p.state = 'talk'; p.t = 3; p.talked = true; talkCD = 5; showMsg('🗣️ "' + pick(npcLines(p.x, p.z)) + '"', 3); return;
   }
-  p.s += p.speed * p.dir * dt; placePed(p, dt); M.animatePerson(p.mesh, p.speed, dt);
+  p.s += p.speed * p.dir * dt; placePed(p, dt); animateNPC(p.mesh, p.speed, dt);
 }
 let talkCD = 0;
 const NPC_LINES = {
@@ -542,12 +561,15 @@ function npcLines(x, z) {
 }
 function scarePeds(x, z, r) {
   for (const p of peds) if (p.state !== 'dead' && Math.hypot(p.x - x, p.z - z) < r) {
-    p.state = 'flee'; p.t = 6; p.speed = 5.5;
+    const b = p.info.behavior, d = Math.hypot(p.x - player.x, p.z - player.z);
+    if (b === 'fight' && !player.car && d < 8) { p.state = 'fight'; p.t = 10; showMsg(pick(['"You want some?!"', '"Come here!"', '"Big mistake, pal."']), 2); continue; }
+    if (b === 'call' && d < 60) p.callT = 3;
+    p.state = 'flee'; p.t = 6; p.speed = 5.5; setNPCPanic(p.mesh, true);
     const [, , dx, dz] = perim(p.s, p.lot.h); p.dir = ((p.x - x) * dx + (p.z - z) * dz) * 1 >= 0 ? 1 : -1;
   }
 }
 function killPed(p, byPlayer = true, crime = 1) {
-  if (p.state === 'dead') return; p.state = 'dead'; p.t = 12; p.fallT = 0;
+  if (p.state === 'dead') return; p.state = 'dead'; p.t = 12; p.fallT = 0; p.callT = 0; setNPCPanic(p.mesh, false); if (byPlayer) dropCash(p.x, p.z, p.info.money || 0);
   if (byPlayer) { addWanted(crime, true); scarePeds(p.x, p.z, 25); }
 }
 
@@ -1287,7 +1309,7 @@ function frame(nowMs) {
     }
   }
   vehicleCollisions();
-  talkCD -= dt; for (const p of [...peds]) updatePed(p, dt);
+  talkCD -= dt; callCD -= dt; for (const p of [...peds]) updatePed(p, dt);
   // keep population near player
   const px = player.car ? player.car.x : player.x, pz = player.car ? player.car.z : player.z;
   for (const v of [...vehicles]) if (v.type === 'traffic' && Math.hypot(v.x - px, v.z - pz) > 170) removeVehicle(v);
