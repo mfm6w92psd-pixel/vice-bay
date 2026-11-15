@@ -330,7 +330,7 @@ HWS.push(
   Object.assign(buildInterstate(scene, { number: 66, name: 'Mother Road', points: [[-7000, 1177], [-7000, 3000], [-6000, 5200], [-3000, 5600], [-1000, 5500], [-150, 5027]], addCol, startMile: 220 }), { us: true }),
 );
 // keep farm barns out from under flyovers (one used to block the SR-70 underpass on I-95)
-for (const [cx, cz, r] of [[-150, 2500, 140], [100, -2550, 140], [-4700, 0, 140]]) {
+for (const [cx, cz, r] of [[-150, 1450, 140], [-150, 2500, 140], [100, -2550, 140], [-4700, 0, 140]]) {
   for (const h of HWS) for (const c of [...h.root.children]) if (c.isMesh && c.geometry?.type === 'BoxGeometry' && c.material?.color?.getHex() === 0xa4161a && Math.hypot(c.position.x - cx, c.position.z - cz) < r) h.root.remove(c);
   for (let k = colliders.length - 1; k >= 0; k--) { const c = colliders[k]; if (Math.abs(c.maxX - c.minX - 12) < 0.01 && Math.abs(c.maxZ - c.minZ - 12) < 0.01 && Math.hypot((c.minX + c.maxX) / 2 - cx, (c.minZ + c.maxZ) / 2 - cz) < r) colliders.splice(k, 1); }
 }
