@@ -1,4 +1,5 @@
 // Vice Bay — Stage 1 core gameplay (New Bot). Art/audio by Mika in ./assets.
+import { buildRoadSigns } from './assets/roadsigns.js';
 import * as THREE from 'three';
 import * as M from './assets/models.js';
 import { GameAudio } from './assets/audio.js';
@@ -328,13 +329,21 @@ HWS.push(
   Object.assign(buildInterstate(scene, { number: 1, name: 'Frontier Highway', points: [[-7327, 850], [-7600, -1000], [-7300, -4000], [-5500, -5200], [-1000, -5300], [100, -5027]], addCol, startMile: 260 }), { us: true }),
   buildInterstate(scene, { number: 275, name: 'Pine Ridge', points: [[-4700, 523], [-4700, -500], [-4400, -1300], [-4700, -2000], [-4700, -2273]], addCol }),
   Object.assign(buildInterstate(scene, { number: 66, name: 'Mother Road', points: [[-7000, 1177], [-7000, 3000], [-6000, 5200], [-3000, 5600], [-1000, 5500], [-150, 5027]], addCol, startMile: 220 }), { us: true }),
+  Object.assign(buildInterstate(scene, { number: 41, name: 'Tamiami Trail', points: [[-4860, 1177], [-5200, 2200], [-6000, 2600], [-6500, 1800], [-6673, 1010]], addCol, startMile: 300 }), { us: true }),
+  Object.assign(buildInterstate(scene, { number: 27, name: 'Heartland', points: [[-390, 4373], [-1200, 3600], [-2000, 3300], [-2900, 2700], [-4540, 1177]], addCol, startMile: 330 }), { us: true }),
+  buildInterstate(scene, { number: 16, name: 'Central', points: [[-4460, -2273], [-3600, -1600], [-2800, -1300], [-2100, -400]], addCol, startMile: 360 }),
 );
 // keep farm barns out from under flyovers (one used to block the SR-70 underpass on I-95)
 for (const [cx, cz, r] of [[-150, 1450, 140], [-150, 2500, 140], [100, -2550, 140], [-4700, 0, 140]]) {
   for (const h of HWS) for (const c of [...h.root.children]) if (c.isMesh && c.geometry?.type === 'BoxGeometry' && c.material?.color?.getHex() === 0xa4161a && Math.hypot(c.position.x - cx, c.position.z - cz) < r) h.root.remove(c);
   for (let k = colliders.length - 1; k >= 0; k--) { const c = colliders[k]; if (Math.abs(c.maxX - c.minX - 12) < 0.01 && Math.abs(c.maxZ - c.minZ - 12) < 0.01 && Math.hypot((c.minX + c.maxX) / 2 - cx, (c.minZ + c.maxZ) / 2 - cz) < r) colliders.splice(k, 1); }
 }
-const inHw = (x, z) => CITIES.some(c => c.inside(x, z)) || inRect(SWAMP, x, z) || inRect(DT, x, z) || LINKS.some(r => inRect(r, x, z)) || inRect(AIR, x, z) || inRect(TOWN, x, z) || HWS.some(h => { const n = h.nearest(x, z); return n.dist < h.width / 2 + 2 || (n.dist < h.width * 1.5 && (n.t < 0.5 || n.t > h.segs[n.segIndex].len - 0.5)); }) || (ic && ic.inZone(x, z)) || (ex && ex.onDeck(x, z));
+buildRoadSigns(scene, { highways: HWS, places: [{ name: 'Vice Bay', x: 0, z: 0 }, { name: 'Airport', x: -1965, z: -211 }, ...CITIES.map(c => ({ name: c.name, x: c.center.x, z: c.center.z }))], cityRadius: 800 });
+// clear roadside scenery (billboards/barns) that lands on another leg of a highway at sharp bends
+{ const onAnyHw = (x, z, pad) => HWS.some(h => h.nearest(x, z).dist < h.width / 2 + pad);
+  for (let k = colliders.length - 1; k >= 0; k--) { const c = colliders[k], w = c.maxX - c.minX, d = c.maxZ - c.minZ; if (!((Math.abs(w - 1) < 0.01 && Math.abs(d - 1) < 0.01) || (Math.abs(w - 12) < 0.01 && Math.abs(d - 12) < 0.01))) continue; const cx = (c.minX + c.maxX) / 2, cz = (c.minZ + c.maxZ) / 2; if (onAnyHw(cx, cz, w > 2 ? 8 : 3)) colliders.splice(k, 1); }
+  for (const h of HWS) for (const c of [...h.root.children]) if (c.isMesh && c.geometry?.type === 'BoxGeometry' && c.material?.color?.getHex() === 0xa4161a && onAnyHw(c.position.x, c.position.z, 8)) h.root.remove(c); }
+const inHw = (x, z) => CITIES.some(c => c.inside(x, z)) || inRect(SWAMP, x, z) || inRect(DT, x, z) || LINKS.some(r => inRect(r, x, z)) || inRect(AIR, x, z) || inRect(TOWN, x, z) || HWS.some(h => { const n = h.nearest(x, z); return n.dist < h.width / 2 + 2 || (n.dist < h.width * 1.5 && (n.t < 0.5 || n.t > h.segs[n.segIndex].len - 0.5 || (n.t < 60 && n.segIndex > 0) || (n.t > h.segs[n.segIndex].len - 60 && n.segIndex < h.segs.length - 1))); }) || (ic && ic.inZone(x, z)) || (ex && ex.onDeck(x, z));
 const isLanes = [{ z: IS.z + 3.2, dir: 1 }, { z: IS.z + 9, dir: 1 }, { z: IS.z - 3.2, dir: -1 }, { z: IS.z - 9, dir: -1 }];
 // ---------- traffic lights at every grid crossing ----------
 const tl = new TrafficLights(scene);
@@ -1551,6 +1560,6 @@ window.__mp = { net, remotes };
 refreshMissionMarkers(); applyQuality(); applyControls();
 gfx = setupGraphics(renderer, scene, camera, { quality: settings.quality === 'ultra' ? 'high' : settings.quality }); gfx.upgrade(scene); applyQuality();
 camera.position.set(player.x + 30, 40, player.z + 50); camera.lookAt(player.x, 0, player.z);
-window.__ex = ex; window.__game = { scene, camera, renderer, sun, state, player, vehicles, peds, settings, enterCar, exitCar, addWanted, MISSIONS, startMission, POI, HWS };
+window.__ex = ex; window.__game = { colliders, inHw, scene, camera, renderer, sun, state, player, vehicles, peds, settings, enterCar, exitCar, addWanted, MISSIONS, startMission, POI, HWS };
 requestAnimationFrame(frame);
 { const vt = document.getElementById('verTag'); if (vt) vt.textContent = 'v' + VERSION; }
