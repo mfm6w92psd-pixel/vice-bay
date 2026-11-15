@@ -319,6 +319,9 @@ HWS.push(
   buildInterstate(scene, { number: 40, name: 'Gulf Coast', points: [[-540, 2500], [-1500, 2500], [-2500, 2100], [-3500, 1300]], addCol, startMile: 60 }),
   buildInterstate(scene, { number: 20, name: 'Northern', points: [[-290, -2550], [-1500, -2550], [-3000, -2900], [-4370, -2600]], addCol, startMile: 80 }),
   buildInterstate(scene, { number: 12, name: 'Airport', points: [[-4310, 0], [-3200, -200], [-2260, -200]], addCol, startMile: 100 }),
+  buildInterstate(scene, { number: 8, name: 'Southern', points: [[-227, -4700], [-1500, -4700], [-3000, -4300], [-4700, -2927]], addCol, startMile: 120 }),
+  buildInterstate(scene, { number: 26, name: 'Lakeshore', points: [[-477, 4700], [-1800, 4700], [-3200, 3800], [-4700, 2600], [-4700, 1177]], addCol, startMile: 140 }),
+  buildInterstate(scene, { number: 14, name: 'Glades', points: [[-122, -1900], [-1000, -1900], [-1970, -1100], [-1970, -400]], addCol, startMile: 160 }),
   buildInterstate(scene, { number: 275, name: 'Pine Ridge', points: [[-4700, 523], [-4700, -500], [-4400, -1300], [-4700, -2000], [-4700, -2273]], addCol }),
 );
 const inHw = (x, z) => CITIES.some(c => c.inside(x, z)) || inRect(SWAMP, x, z) || inRect(DT, x, z) || LINKS.some(r => inRect(r, x, z)) || inRect(AIR, x, z) || inRect(TOWN, x, z) || HWS.some(h => h.nearest(x, z).dist < h.width / 2 + 2) || (ic && ic.inZone(x, z)) || (ex && ex.onDeck(x, z));
