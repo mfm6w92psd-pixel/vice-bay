@@ -14,6 +14,7 @@ import { setupGraphics } from './assets/graphics.js';
 import { createNet } from './net.js';
 import { buildInterchange, combineRoads } from './assets/interchange.js';
 import { buildExpressway } from './assets/expressway.js';
+import { VERSION, openVersionHistory } from './assets/changelog.js';
 import { makeNPC, pickNPCType, animateNPC, setNPCPanic } from './assets/npcs.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -305,6 +306,9 @@ HWS.push(
   buildInterstate(scene, { number: 95, name: 'Sunrise City', points: [[-150, 2000], [-150, 3000], [100, 3600], [-150, 4100], [-150, 4373]], addCol, startMile: 30 }),
   buildInterstate(scene, { number: 75, name: 'Cypress Point', points: [[100, -2100], [100, -3000], [-200, -3600], [100, -4100], [100, -4373]], addCol, startMile: 45 }),
   buildInterstate(scene, { number: 4, name: 'Lake Mirage', points: [[-700, 850], [-1600, 850], [-2400, 1250], [-3500, 1250], [-4000, 850], [-4373, 850]], addCol }),
+  buildInterstate(scene, { number: 40, name: 'Gulf Coast', points: [[-540, 2500], [-1500, 2500], [-2500, 2100], [-3500, 1300]], addCol, startMile: 60 }),
+  buildInterstate(scene, { number: 20, name: 'Northern', points: [[-290, -2550], [-1500, -2550], [-3000, -2900], [-4370, -2600]], addCol, startMile: 80 }),
+  buildInterstate(scene, { number: 12, name: 'Airport', points: [[-4310, 0], [-3200, -200], [-2260, -200]], addCol, startMile: 100 }),
   buildInterstate(scene, { number: 275, name: 'Pine Ridge', points: [[-4700, 523], [-4700, -500], [-4400, -1300], [-4700, -2000], [-4700, -2273]], addCol }),
 );
 const inHw = (x, z) => CITIES.some(c => c.inside(x, z)) || inRect(SWAMP, x, z) || inRect(DT, x, z) || LINKS.some(r => inRect(r, x, z)) || inRect(AIR, x, z) || inRect(TOWN, x, z) || HWS.some(h => h.nearest(x, z).dist < h.width / 2 + 2) || (ic && ic.inZone(x, z)) || (ex && ex.onDeck(x, z));
@@ -1379,7 +1383,8 @@ $('btnPause').addEventListener('click', () => { audio.click(); togglePause(); })
 $('btnPause').addEventListener('touchstart', e => { e.preventDefault(); e.stopPropagation(); togglePause(); }, { passive: false });
 document.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', () => {
   audio.click(); const a = b.dataset.act;
-  if (a === 'resume') togglePause(false);
+  if (a === 'versions') openVersionHistory();
+  else if (a === 'resume') togglePause(false);
   else if (a === 'save') { if (state.wanted) showMsg('Lose the cops before saving'); else saveGame(); togglePause(false); }
   else if (a === 'load') { if (loadGame()) togglePause(false); }
   else if (a === 'settings') { syncSettingsUI(); show('settings'); }
@@ -1479,3 +1484,4 @@ gfx = setupGraphics(renderer, scene, camera, { quality: settings.quality === 'ul
 camera.position.set(player.x + 30, 40, player.z + 50); camera.lookAt(player.x, 0, player.z);
 window.__ex = ex; window.__game = { state, player, vehicles, peds, settings, enterCar, exitCar, addWanted, MISSIONS, startMission, POI, HWS };
 requestAnimationFrame(frame);
+{ const vt = document.getElementById('verTag'); if (vt) vt.textContent = 'v' + VERSION; }

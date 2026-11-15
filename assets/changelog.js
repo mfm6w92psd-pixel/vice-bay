@@ -4,6 +4,8 @@
 //   optional: show `v${VERSION}` small in a corner of the start screen.
 // When shipping an update, add a new entry at the TOP of CHANGELOG (VERSION follows automatically).
 export const CHANGELOG = [
+  { v: '1.19', date: 'Nov 15', title: 'More interstates', items: ['I-40 Gulf Coast from Sunrise City west to I-4', 'I-20 Northern from Cypress Point to Pine Ridge', 'I-12 from Lake Mirage to the airport', 'Version History screen'] },
+  { v: '1.18', date: 'Nov 15', title: 'Airport Expressway', items: ['SR-112 raised toll road from I-295 to the airport ($2 toll)', 'Three more interchanges on I-95, I-75 and I-275'] },
   { v: '1.17', date: 'Nov 15', title: 'Big interchange', items: ['SR-836 flyover crosses I-95 north of the city', 'Four curving ramps and green exit signs'] },
   { v: '1.16', date: 'Nov 15', title: 'Traffic everywhere', items: ['NPC cars, bikes, trucks and buses in all four new cities and Vice Bay Heights'] },
   { v: '1.15', date: 'Nov 15', title: '8 kinds of people', items: ['Tourists, joggers, business people, beachgoers, gang members, workers, retirees and locals', 'Some run, some fight back, some call the cops', 'People drop cash'] },
