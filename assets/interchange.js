@@ -180,7 +180,7 @@ export function buildInterchange(scene, { x: CX = -150, z: CZ = 1450, H = 10, ad
     const g = new THREE.Mesh(new THREE.CircleGeometry(60, 24), new THREE.MeshStandardMaterial({ color: 0x5f9e47 })); g.rotation.x = -Math.PI / 2; g.position.set(CX + sx * 85, 0.012, CZ + sz * 85); g.receiveShadow = true; root.add(g);
     for (let k = 0; k < 5; k++) { const p = makePalm(); p.position.set(CX + sx * (60 + k * 9), 0, CZ + sz * (110 - k * 9)); if (!inZone(p.position.x, p.position.z)) root.add(p); }
   }
-  return { root, heightAt, clampToDeck, inZone, roadName, paths, lanes, deckY: H, center: { x: CX, z: CZ } };
+  return { root, heightAt, clampToDeck, inZone, roadName, paths, lanes, deckY: H, center: { x: CX, z: CZ }, name, exit, hwy, us };
 }
 
 // Elevated expressway along a 2D polyline: ramps up from the ground at both ends, flat at height H in between.

@@ -1,6 +1,6 @@
 // Vice Bay — Stage 1 core gameplay (New Bot). Art/audio by Mika in ./assets.
 import { buildTeleport } from './assets/teleport.js';
-import { buildRoadSigns } from './assets/roadsigns.js';
+import { buildRoadSigns, buildExitSigns } from './assets/roadsigns.js';
 import * as THREE from 'three';
 import * as M from './assets/models.js';
 import { GameAudio } from './assets/audio.js';
@@ -130,7 +130,7 @@ function cityStubs(pts) {
   }
   return out;
 }
-const buildInterstate = (sc, o) => _buildInterstate(sc, { sceneryEvery: 150, lampEvery: 240, markerEvery: 5, postEvery: 24, ...o, points: cityStubs(o.points).map(wpt) });
+const buildInterstate = (sc, o) => { const h = _buildInterstate(sc, { sceneryEvery: 150, lampEvery: 240, markerEvery: 5, postEvery: 24, ...o, points: cityStubs(o.points).map(wpt) }); h.startMile = o.startMile || 0; return h; };
 const BEACH_Z0 = wp(0, -1650)[1], BEACH_Z1 = wp(0, 5600)[1];
 const ground = new THREE.Mesh(new THREE.PlaneGeometry(90000, 90000), M.mat(0x7fbf7a));
 ground.position.set(-15000, -0.02, 0); ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
@@ -387,6 +387,7 @@ for (const [cx, cz, r] of [[-150, 1450, 140], [100, -3950, 300], [-150, 15600, 3
   for (let k = colliders.length - 1; k >= 0; k--) { const c = colliders[k]; if (Math.abs(c.maxX - c.minX - 12) < 0.01 && Math.abs(c.maxZ - c.minZ - 12) < 0.01 && Math.hypot((c.minX + c.maxX) / 2 - cx, (c.minZ + c.maxZ) / 2 - cz) < r) colliders.splice(k, 1); }
 }
 buildRoadSigns(scene, { highways: HWS, places: [{ name: 'Vice Bay', x: 0, z: 0 }, { name: 'Airport', x: AIRC[0], z: AIRC[1] }, ...CITIES.map(c => ({ name: c.name, x: c.center.x, z: c.center.z }))], cityRadius: 800 });
+buildExitSigns(scene, { highways: HWS, interchanges: ic.list, places: [{ name: 'Vice Bay', x: 0, z: 0 }, { name: 'Airport', x: AIRC[0], z: AIRC[1] }, ...CITIES.map(c => ({ name: c.name, x: c.center.x, z: c.center.z }))] });
 // New Bot: SR-408 Gulf Coast Expressway, a raised 4-lane road from Coral Springs south-east to Pelican Bay, over I-20 and the countryside
 { const ex1 = ex, ex2 = buildExpressway(scene, { name: 'SR-408 Gulf Coast Expressway', points: [[-2973, -750], [-2400, -750], [-1700, -2000], [-1700, -3650], [-1973, -3650]].map(wpt), H: 12, W: 18, up: 180, down: 180, R: 400, lampEvery: 90, addCol,
     onRoad: (x, z) => HWS.some(h => h.nearest(x, z).dist < h.width / 2 + 3) || CITIES.some(c => c.inside(x, z)),

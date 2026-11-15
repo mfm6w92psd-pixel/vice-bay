@@ -88,3 +88,83 @@ export function buildRoadSigns(scene, { highways, places = [], cityRadius = 450 
   }
   return { root, count };
 }
+
+// ---------- EXIT signs ----------
+// Advance green signs before every highway junction (where another highway starts/ends on this one)
+// and before every flyover interchange, both directions:  [EXIT 42] / I-36 WEST / Palm Harbor / 2 MILES
+// plus a small "EXIT 42 ↗" gore sign right at the split.
+function exitSign(num, lines, dist) {
+  const rows = [...lines, dist].filter(Boolean);
+  const key = 'x:' + num + '|' + rows.join('|');
+  const t = tex(key, 320, 70 + rows.length * 44, (x, w, h) => {
+    x.fillStyle = '#0b6b3a'; x.fillRect(0, 0, w, h); x.strokeStyle = '#fff'; x.lineWidth = 4; x.strokeRect(6, 6, w - 12, h - 12);
+    // yellow-on-green EXIT tab at the top right, like real US signs
+    x.fillStyle = '#ffd200'; x.fillRect(w - 150, 12, 136, 38); x.fillStyle = '#0b6b3a'; x.font = 'bold 26px sans-serif'; x.textAlign = 'center'; x.fillText('EXIT ' + num, w - 82, 41);
+    x.fillStyle = '#fff'; x.textAlign = 'left';
+    rows.forEach((r, i) => { const last = i === rows.length - 1 && dist; x.font = `bold ${last ? 24 : (i === 0 ? 30 : 27)}px sans-serif`; x.fillText(r, 18, 92 + i * 44); });
+  });
+  return panel(t, 6, (70 + rows.length * 44) / 320 * 6, 4.2);
+}
+function goreSign(num, left) {
+  const t = tex('g:' + num + (left ? 'L' : ''), 160, 110, (x, w, h) => {
+    x.fillStyle = '#0b6b3a'; x.fillRect(0, 0, w, h); x.strokeStyle = '#fff'; x.lineWidth = 4; x.strokeRect(5, 5, w - 10, h - 10);
+    x.fillStyle = '#fff'; x.textAlign = 'center'; x.font = 'bold 26px sans-serif'; x.fillText('EXIT', w / 2, 38); x.fillText(String(num), w / 2 + (left ? 14 : -14), 80);
+    x.font = 'bold 40px sans-serif'; x.fillText(left ? '↖' : '↗', w / 2 + (left ? -38 : 38), 84);
+  });
+  return panel(t, 1.8, 1.25, 2.4);
+}
+const cardinal = (dx, dz) => Math.abs(dx) > Math.abs(dz) ? (dx > 0 ? 'EAST' : 'WEST') : (dz < 0 ? 'NORTH' : 'SOUTH');
+const label = h => (h.us ? 'US-' : 'I-') + h.number;
+
+export function buildExitSigns(scene, { highways, interchanges = [], places = [], advance = [640, 220] } = {}) {
+  const root = new THREE.Group(); root.name = 'exitsigns'; scene.add(root);
+  const nearestPlace = (x, z) => { let b = null, bd = Infinity; for (const c of places) { const d = Math.hypot(c.x - x, c.z - z); if (d < bd) { bd = d; b = c; } } return b; };
+  let count = 0;
+  const posOf = (h, n) => { let acc = 0; for (let i = 0; i < n.segIndex; i++) acc += h.segs[i].len; return acc + n.t; };
+  const pointAt = (h, pos) => { let acc = 0; for (const s of h.segs) { if (pos <= acc + s.len || s === h.segs[h.segs.length - 1]) return { s, d: Math.max(0, Math.min(s.len, pos - acc)) }; acc += s.len; } };
+  for (const h of highways) {
+    if (!h.segs?.length) continue;
+    const total = h.segs.reduce((a, s) => a + s.len, 0), side = (h.width || 30) / 2 + 3.5;
+    const exits = [];
+    // junctions: another highway's end sits on this one's centreline, away from this one's own ends
+    for (const g of highways) {
+      if (g === h || !g.segs?.length) continue;
+      const gs = g.segs, ends = [[gs[0].a, gs[gs.length - 1].b], [gs[gs.length - 1].b, gs[0].a]];
+      for (const [e, far] of ends) {
+        const n = h.nearest(e.x, e.z); if (n.dist > (h.width || 30)) continue;
+        const pos = posOf(h, n); if (pos < 300 || pos > total - 300) continue;
+        // direction g heads away from the junction (use its first 300 units, not the far end)
+        const ref = e === gs[0].a ? gs[0].a.clone().addScaledVector(gs[0].dir, Math.min(300, gs[0].len)) : gs[gs.length - 1].b.clone().addScaledVector(gs[gs.length - 1].dir, -Math.min(300, gs[gs.length - 1].len));
+        const pl = nearestPlace(far.x, far.z);
+        const hs = pointAt(h, pos).s, sideG = Math.sign((ref.x - e.x) * hs.right.x + (ref.z - e.z) * hs.right.z);
+        exits.push({ pos, sideG, lines: [`${label(g)} ${cardinal(ref.x - e.x, ref.z - e.z)}`, pl?.name] });
+      }
+    }
+    // flyover interchanges on this highway
+    for (const ic of interchanges) {
+      if (!ic.center) continue; const n = h.nearest(ic.center.x, ic.center.z); if (n.dist > 40) continue;
+      exits.push({ pos: posOf(h, n), num: ic.exit, lines: [`${ic.name}`, 'EAST / WEST'], ic: true });
+    }
+    exits.sort((a, b) => a.pos - b.pos);
+    const base = h.startMile || 0;
+    for (const x of exits) {
+      const num = x.num ?? Math.max(1, base + Math.round(x.pos / UNITS_PER_MILE));
+      for (const dir of [1, -1]) {               // 1 = forward traffic (drives on -right side), -1 = reverse
+        const dists = x.ic ? [advance[0] + 300] : advance;   // interchanges already have their own EXIT gantry at 300
+        for (const ad of dists) {
+          const pp = x.pos - dir * ad; if (pp < 40 || pp > total - 40) continue;
+          if (exits.some(o => o !== x && (o.pos - pp) * dir > 0 && (x.pos - o.pos) * dir > 0)) continue;   // another exit in between: skip, avoids clutter
+          const { s, d } = pointAt(h, pp), p = s.a.clone().addScaledVector(s.dir, d).addScaledVector(s.right, -dir * side);
+          const mi = ad / UNITS_PER_MILE, txt = mi >= 1.5 ? `${Math.round(mi)} MILES` : '1 MILE';
+          const sg = exitSign(num, x.lines.filter(Boolean), txt); sg.position.set(p.x, 0, p.z); sg.rotation.y = s.ang + (dir === 1 ? Math.PI : 0); root.add(sg); count++;
+        }
+        if (!x.ic) {
+          const pp = x.pos - dir * 45; if (pp < 20 || pp > total - 20) continue;
+          const { s, d } = pointAt(h, pp), p = s.a.clone().addScaledVector(s.dir, d).addScaledVector(s.right, -dir * side);
+          const gs = goreSign(num, x.sideG * dir > 0);   // +right is the traveller's left for forward traffic gs.position.set(p.x, 0, p.z); gs.rotation.y = s.ang + (dir === 1 ? Math.PI : 0); root.add(gs); count++;
+        }
+      }
+    }
+  }
+  return { root, count };
+}
