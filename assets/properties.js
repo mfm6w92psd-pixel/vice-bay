@@ -27,8 +27,14 @@ function load() { try { const s = JSON.parse(localStorage.getItem(KEY) || '{}');
 function save() { const s = {}; for (const p of PROPERTIES) s[p.id] = { owned: p.owned, safe: Math.floor(p.safe) }; try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { } }
 load();
 
-export function resolveProperties(POI) {
-  for (const p of PROPERTIES) if (p.poi && POI[p.poi]) { p.x = POI[p.poi].x + (p.dx || 0); p.z = POI[p.poi].z + (p.dz || 0); }
+// scale: multiply fixed x/z by this (e.g. 5 for a 5x world). POI-based spots follow POI. Optional overrides: { id: {x, z} }.
+export function resolveProperties(POI, scale = 1, overrides = {}) {
+  for (const p of PROPERTIES) {
+    if (p.bx === undefined && !p.poi) { p.bx = p.x; p.bz = p.z; }
+    if (overrides[p.id]) { p.x = overrides[p.id].x; p.z = overrides[p.id].z; }
+    else if (p.poi && POI[p.poi]) { p.x = POI[p.poi].x + (p.dx || 0); p.z = POI[p.poi].z + (p.dz || 0); }
+    else if (!p.poi) { p.x = p.bx * scale; p.z = p.bz * scale; }
+  }
 }
 export function resetProperties() { for (const p of PROPERTIES) { p.owned = false; p.safe = 0; p._t = 0; } save(); }
 export function ownedCount() { return PROPERTIES.filter(p => p.owned).length; }

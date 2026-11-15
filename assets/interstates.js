@@ -64,7 +64,7 @@ function roadTexture() {
   return roadTex;
 }
 
-export function buildInterstate(scene, { number = 95, name = 'Vice Bay', points, addCol = () => {}, scenery = true, startMile = 0 } = {}) {
+export function buildInterstate(scene, { number = 95, name = 'Vice Bay', points, addCol = () => {}, scenery = true, startMile = 0, sceneryEvery = 30, lampEvery = 60, markerEvery = 1, postEvery = 8 } = {}) {
   const root = new THREE.Group(); scene.add(root);
   const P = points.map(([x, z]) => new THREE.Vector3(x, 0, z));
   const segs = [];
@@ -87,17 +87,17 @@ export function buildInterstate(scene, { number = 95, name = 'Vice Bay', points,
       const p = at(s, s.len / 2, off, 0.55), r = box(0.15, 0.3, s.len - 16, 0xcfcfcf, p.x, p.y, p.z); r.rotation.y = s.ang; root.add(r);
     }
     { // guardrail posts as one InstancedMesh per segment (cheap on phones)
-      const n = Math.floor((s.len - 16) / 8) * 4, im = new THREE.InstancedMesh(new THREE.BoxGeometry(0.12, 0.6, 0.12), mat(0x888888), Math.max(n, 1)), m4 = new THREE.Matrix4(); let i = 0;
-      for (let d = 8; d < s.len - 8 && i < n; d += 8) for (const off of [-W / 2 + 0.3, W / 2 - 0.3, -MEDIAN / 2 + 0.6, MEDIAN / 2 - 0.6]) { const q = at(s, d, off, 0.3); m4.makeTranslation(q.x, q.y, q.z); im.setMatrixAt(i++, m4); }
+      const n = Math.floor((s.len - 16) / postEvery) * 4, im = new THREE.InstancedMesh(new THREE.BoxGeometry(0.12, 0.6, 0.12), mat(0x888888), Math.max(n, 1)), m4 = new THREE.Matrix4(); let i = 0;
+      for (let d = 8; d < s.len - 8 && i < n; d += postEvery) for (const off of [-W / 2 + 0.3, W / 2 - 0.3, -MEDIAN / 2 + 0.6, MEDIAN / 2 - 0.6]) { const q = at(s, d, off, 0.3); m4.makeTranslation(q.x, q.y, q.z); im.setMatrixAt(i++, m4); }
       im.count = i; root.add(im);
     }
     for (let d = 20; d < s.len - 10; d += 10) {
       dist += 10;
-      if (dist % 160 === 0) { mile++; const mm = canvasPlane((x, w, h) => { x.fillStyle = '#0b6b3a'; x.fillRect(0, 0, w, h); x.fillStyle = '#fff'; x.font = 'bold 30px sans-serif'; x.textAlign = 'center'; x.fillText('MILE', w / 2, 40); x.font = 'bold 54px sans-serif'; x.fillText(String(mile), w / 2, 100); }, 128, 128, 0.8, 0.8);
+      if (dist % 160 === 0 && (++mile) % markerEvery === 0) { const mm = canvasPlane((x, w, h) => { x.fillStyle = '#0b6b3a'; x.fillRect(0, 0, w, h); x.fillStyle = '#fff'; x.font = 'bold 30px sans-serif'; x.textAlign = 'center'; x.fillText('MILE', w / 2, 40); x.font = 'bold 54px sans-serif'; x.fillText(String(mile), w / 2, 100); }, 128, 128, 0.8, 0.8);
         const p = at(s, d, -(W / 2 + 1.2), 1.3); mm.position.copy(p); mm.rotation.y = s.ang + Math.PI; root.add(mm); root.add(box(0.08, 0.9, 0.08, 0x888888, p.x, 0.45, p.z)); }
-      if (dist % 60 === 0) { const p = at(s, d, 0, 0); root.add(box(0.15, 8, 0.15, 0x666666, p.x, 4, p.z));
+      if (dist % lampEvery === 0) { const p = at(s, d, 0, 0); root.add(box(0.15, 8, 0.15, 0x666666, p.x, 4, p.z));
         for (const sd of [-1, 1]) { const lp = at(s, d, sd * 3, 7.9); const l = box(0.5, 0.15, 0.3, 0xffffcc, lp.x, lp.y, lp.z, { emissive: 0xffe08a, emissiveIntensity: 1.2 }); l.rotation.y = s.ang; root.add(l); } }
-      if (scenery && dist % 30 === 0) for (const sd of [-1, 1]) {
+      if (scenery && dist % sceneryEvery === 0) for (const sd of [-1, 1]) {
         const off = sd * (W / 2 + 8 + ((k * 37) % 25)); const p = at(s, d, off); k++;
         if (k % 9 === 0) { const b = billboard(k); b.position.copy(at(s, d, sd * (W / 2 + 10))); b.rotation.y = s.ang + (sd > 0 ? Math.PI : 0); root.add(b); addCol(b.position.x, b.position.z, 1, 1); }
         else if (k % 3 === 0) { const t = makePalm(); t.position.copy(p); root.add(t); }
@@ -107,7 +107,7 @@ export function buildInterstate(scene, { number = 95, name = 'Vice Bay', points,
     // farm fields on long rural segments
     if (scenery && s.len > 300) for (const sd of [-1, 1]) {
       const p = at(s, s.len / 2, sd * (W / 2 + 70));
-      const f = new THREE.Mesh(new THREE.PlaneGeometry(90, s.len * 0.6), new THREE.MeshStandardMaterial({ color: sd > 0 ? 0xd9c36a : 0x6fae4a, side: THREE.DoubleSide })); f.rotation.x = -Math.PI / 2; f.rotation.z = s.ang; f.position.set(p.x, 0.008, p.z); f.receiveShadow = true; root.add(f);
+      const f = new THREE.Mesh(new THREE.PlaneGeometry(90, Math.min(s.len * 0.6, 500)), new THREE.MeshStandardMaterial({ color: sd > 0 ? 0xd9c36a : 0x6fae4a, side: THREE.DoubleSide })); f.rotation.x = -Math.PI / 2; f.rotation.z = s.ang; f.position.set(p.x, 0.008, p.z); f.receiveShadow = true; root.add(f);
       const barn = box(10, 7, 14, 0xa4161a, p.x + 20 * sd, 3.5, p.z); barn.rotation.y = s.ang; root.add(barn); addCol(barn.position.x, barn.position.z, 12, 12);
     }
   });

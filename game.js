@@ -7,7 +7,7 @@ import * as V from './assets/vehicles.js';
 import { buildPortCoral } from './assets/neighborhoods.js';
 import { TrafficLights } from './assets/trafficlights.js';
 import { buildFreeway } from './assets/freeway.js';
-import { buildInterstate } from './assets/interstates.js';
+import { buildInterstate as _buildInterstate } from './assets/interstates.js';
 import { buildAirport, buildSmallTown, makeJet } from './assets/districts.js';
 import { buildSwamp, buildDowntown, makeAirboat } from './assets/regions.js';
 import { buildCity } from './assets/cities.js';
@@ -16,7 +16,7 @@ import { createNet } from './net.js';
 import { buildInterchange, combineRoads } from './assets/interchange.js';
 import { buildExpressway } from './assets/expressway.js';
 import { VERSION, openVersionHistory } from './assets/changelog.js';
-import { buildStuntJumps } from './assets/stunts.js';
+import { buildStuntJumps, STUNT_SPOTS } from './assets/stunts.js';
 import { openShop } from './assets/shop.js';
 import { PROPERTIES, resolveProperties, openProperty, tickIncome, propertyAt, resetProperties } from './assets/properties.js';
 import { makeNPC, pickNPCType, animateNPC, setNPCPanic } from './assets/npcs.js';
@@ -103,13 +103,41 @@ const SHORE = 222, CAR_MAX_X = 224, FOOT_MAX_X = 320, EDGE = HALF + 16;
 const colliders = [];
 const addCol = (x, z, w, d, h = 12) => colliders.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2, h });
 
-const ground = new THREE.Mesh(new THREE.PlaneGeometry(12000, 12000), M.mat(0x7fbf7a));
-ground.position.set(-2000, -0.02, 0); ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+// ---------- 5x world warp: the Vice Bay core stays put, everything outside it is spread 5x further out ----------
+const WORLD_X = 5, CORE = { minX: -800, maxX: 400, minZ: -800, maxZ: 1550 };
+const wAxis = (v, lo, hi) => v < lo ? lo + (v - lo) * WORLD_X : v > hi ? hi + (v - hi) * WORLD_X : v;
+const warpRaw = (x, z) => [wAxis(x, CORE.minX, CORE.maxX), wAxis(z, CORE.minZ, CORE.maxZ)];
+const WARP_SITES = []; // { x, z, r } or { rect, pad }: points inside move rigidly with the site's centre
+const siteOf = (x, z) => WARP_SITES.find(s => s.rect ? (x >= s.rect.minX - s.pad && x <= s.rect.maxX + s.pad && z >= s.rect.minZ - s.pad && z <= s.rect.maxZ + s.pad) : Math.max(Math.abs(x - s.x), Math.abs(z - s.z)) <= s.r);
+function wp(x, z) { const s = siteOf(x, z); if (!s) return warpRaw(x, z); const cx = s.rect ? (s.rect.minX + s.rect.maxX) / 2 : s.x, cz = s.rect ? (s.rect.minZ + s.rect.maxZ) / 2 : s.z, [nx, nz] = warpRaw(cx, cz); return [x + nx - cx, z + nz - cz]; }
+const wpt = ([x, z]) => wp(x, z);
+const wRect = r => { const cx = (r.minX + r.maxX) / 2, cz = (r.minZ + r.maxZ) / 2, [nx, nz] = warpRaw(cx, cz), dx = nx - cx, dz = nz - cz; return { ...r, minX: r.minX + dx, maxX: r.maxX + dx, minZ: r.minZ + dz, maxZ: r.maxZ + dz }; };
+const AIR0 = { minX: -2232, maxX: -1698, minZ: -393, maxZ: -29 }, TOWN0 = { minX: -312, maxX: 12, minZ: 1688, maxZ: 2012 }, SWAMP0 = { minX: -122, maxX: 322, minZ: -2112, maxZ: -1688 };
+WARP_SITES.push({ rect: AIR0, pad: 60 }, { rect: TOWN0, pad: 20 }, { rect: SWAMP0, pad: 20 });
+for (const [x, z] of [[-150, 4700], [100, -4700], [-4700, 850], [-4700, -2600], [-7000, 850]]) WARP_SITES.push({ x, z, r: 420, city: true });
+for (const [x, z] of [[-150, 2500], [100, -2550], [-4700, 0]]) WARP_SITES.push({ x, z, r: 420 });
+const AIRC = wp(-1970, -211), TOWNC = wp(-150, 1850), AOX = AIRC[0] + 1970, AOZ = AIRC[1] + 211, TOX = TOWNC[0] + 150, TOZ = TOWNC[1] - 1850;
+// highways that meet a city edge at an angle get a short straight stub, so they line up with the street instead of the buildings beside it
+function cityStubs(pts) {
+  const out = pts.map(q => [...q]);
+  for (const end of [0, 1]) {
+    const i = end ? out.length - 1 : 0, j = end ? out.length - 2 : 1, [x, z] = out[i];
+    const c = WARP_SITES.find(s => s.city && Math.abs(Math.max(Math.abs(x - s.x), Math.abs(z - s.z)) - 327) < 8); if (!c) continue;
+    const n = Math.abs(z - c.z) >= Math.abs(x - c.x) ? [0, Math.sign(z - c.z)] : [Math.sign(x - c.x), 0];
+    const [ox, oz] = out[j], dl = Math.hypot(ox - x, oz - z); if (((ox - x) * n[0] + (oz - z) * n[1]) / dl > 0.97) continue;
+    const stub = [x + n[0] * 70, z + n[1] * 70]; if (end) out.splice(i, 0, stub); else out.splice(1, 0, stub);
+  }
+  return out;
+}
+const buildInterstate = (sc, o) => _buildInterstate(sc, { sceneryEvery: 150, lampEvery: 240, markerEvery: 5, postEvery: 24, ...o, points: cityStubs(o.points).map(wpt) });
+const BEACH_Z0 = wp(0, -1650)[1], BEACH_Z1 = wp(0, 5600)[1];
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(90000, 90000), M.mat(0x7fbf7a));
+ground.position.set(-15000, -0.02, 0); ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
 // beach + ocean
-const sand = new THREE.Mesh(new THREE.PlaneGeometry(SHORE - HALF + 10, 7250), M.mat(0xf2dca0));
-sand.rotation.x = -Math.PI / 2; sand.position.set((HALF + SHORE) / 2 + 2, 0.015, 1975); sand.receiveShadow = true; scene.add(sand);
-const water = new THREE.Mesh(new THREE.PlaneGeometry(600, 7250), new THREE.MeshStandardMaterial({ color: 0x1fa3c9, roughness: 0.15, metalness: 0.3, transparent: true, opacity: 0.9 }));
-water.rotation.x = -Math.PI / 2; water.position.set(SHORE + 300, 0.05, 1975); scene.add(water);
+const sand = new THREE.Mesh(new THREE.PlaneGeometry(SHORE - HALF + 10, BEACH_Z1 - BEACH_Z0), M.mat(0xf2dca0));
+sand.rotation.x = -Math.PI / 2; sand.position.set((HALF + SHORE) / 2 + 2, 0.015, (BEACH_Z0 + BEACH_Z1) / 2); sand.receiveShadow = true; scene.add(sand);
+const water = new THREE.Mesh(new THREE.PlaneGeometry(600, BEACH_Z1 - BEACH_Z0), new THREE.MeshStandardMaterial({ color: 0x1fa3c9, roughness: 0.15, metalness: 0.3, transparent: true, opacity: 0.9 }));
+water.rotation.x = -Math.PI / 2; water.position.set(SHORE + 300, 0.05, (BEACH_Z0 + BEACH_Z1) / 2); scene.add(water);
 
 function roadTexture(alongU) {
   const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d');
@@ -189,7 +217,7 @@ port.water.position.y = 0.03;
 for (const z of [-197, -213]) { const r = M.makeRoad(20, false); r.position.set(0, 0.012, z); scene.add(r); }
 const PORT = { minX: -72, maxX: 110, minZ: -385, maxZ: -180 };
 const inPort = (x, z) => x >= PORT.minX && x <= PORT.maxX && z >= PORT.minZ && z <= PORT.maxZ;
-const inWater = (x, z) => (x > SHORE + 2 && z > -1650 && z < 5600) || inSwampWater(x, z) || (x >= port.waterRect.minX + 5 && x <= port.waterRect.maxX && z >= port.waterRect.minZ && z <= port.waterRect.maxZ);
+const inWater = (x, z) => (x > SHORE + 2 && z > BEACH_Z0 && z < BEACH_Z1) || inSwampWater(x, z) || (x >= port.waterRect.minX + 5 && x <= port.waterRect.maxX && z >= port.waterRect.minZ && z <= port.waterRect.maxZ);
 const allowedAt = (x, z, foot) => inFwZone(x, z) || inIsZone(x, z) || inHw(x, z) || (x >= -EDGE - (foot ? 30 : 0) && x <= (foot ? FOOT_MAX_X : FOOT_MAX_X) && z >= -EDGE - (foot ? 30 : 0) && z <= EDGE + (foot ? 30 : 0)) || inPort(x, z);
 POI.garage = { x: port.pois.garage.x, z: port.pois.garage.z, label: 'PORT CORAL CUSTOMS' };
 POI.diner = { x: port.pois.diner.x, z: port.pois.diner.z, label: 'CORAL DINER' };
@@ -268,14 +296,14 @@ const HWS = [
   buildInterstate(scene, { number: 10, name: 'Vice Bay', points: [[-216, FW.z0 - 1], [-700, FW.z0 - 1], [-1000, -41], [-1700, -41]], addCol }),
 ];
 // Mika's districts at the far ends of I-10 and I-95
-const airport = buildAirport(scene, { x: -1970, z: -211, addCol });
-const town = buildSmallTown(scene, { x: -150, z: 1850, addCol });
-const AIR = { minX: -2232, maxX: -1698, minZ: -393, maxZ: -29 }, TOWN = { minX: -312, maxX: 12, minZ: 1688, maxZ: 2012 };
+const airport = buildAirport(scene, { x: AIRC[0], z: AIRC[1], addCol });
+const town = buildSmallTown(scene, { x: TOWNC[0], z: TOWNC[1], addCol });
+const AIR = wRect(AIR0), TOWN = wRect(TOWN0);
 const inRect = (r, x, z) => x >= r.minX && x <= r.maxX && z >= r.minZ && z <= r.maxZ;
 // Mika's regions: Gator Glades at the top of I-75, Vice Bay Heights downtown west of VB-1
-const swamp = buildSwamp(scene, { x: 100, z: -1900, addCol });
+const SWC = wp(100, -1900), swamp = buildSwamp(scene, { x: SWC[0], z: SWC[1], addCol });
 const downtown = buildDowntown(scene, { x: -450, z: 0, addCol });
-const SWAMP = { minX: -122, maxX: 322, minZ: -2112, maxZ: -1688 }, DT = { minX: -622, maxX: -278, minZ: -172, maxZ: 172 };
+const SWAMP = wRect(SWAMP0), DT = { minX: -622, maxX: -278, minZ: -172, maxZ: 172 };
 const SWROADS = swamp.streets;
 const onSwampRoad = (x, z) => SWROADS.some(r => inRect(r, x, z));
 function inSwampWater(x, z) { return inRect(SWAMP, x, z) && swamp.waterRects.some(r => inRect(r, x, z)) && !onSwampRoad(x, z); }
@@ -292,11 +320,11 @@ for (const r of LINKS) {
 }
 // 5x world: four satellite cities linked by interstate extensions
 const CITIES = [
-  buildCity(scene, { name: 'Sunrise City', x: -150, z: 4700, seed: 3, addCol }),
-  buildCity(scene, { name: 'Cypress Point', x: 100, z: -4700, seed: 7, addCol }),
-  buildCity(scene, { name: 'Lake Mirage', x: -4700, z: 850, seed: 11, addCol }),
-  buildCity(scene, { name: 'Pine Ridge', x: -4700, z: -2600, seed: 19, addCol }),
-  buildCity(scene, { name: 'Palm Harbor', x: -7000, z: 850, seed: 23, addCol }),
+  buildCity(scene, { name: 'Sunrise City', x: wp(-150, 4700)[0], z: wp(-150, 4700)[1], seed: 3, addCol }),
+  buildCity(scene, { name: 'Cypress Point', x: wp(100, -4700)[0], z: wp(100, -4700)[1], seed: 7, addCol }),
+  buildCity(scene, { name: 'Lake Mirage', x: wp(-4700, 850)[0], z: wp(-4700, 850)[1], seed: 11, addCol }),
+  buildCity(scene, { name: 'Pine Ridge', x: wp(-4700, -2600)[0], z: wp(-4700, -2600)[1], seed: 19, addCol }),
+  buildCity(scene, { name: 'Palm Harbor', x: wp(-7000, 850)[0], z: wp(-7000, 850)[1], seed: 23, addCol }),
 ];
 const npcLots = [];
 // NPC sidewalks for the newer areas: city blocks, downtown blocks, and small stroll loops at district spawn points
@@ -305,12 +333,12 @@ for (const c of CITIES) { const L = c.lines; for (let i = 0; i < L.length - 1; i
 // Mika's I-95 / SR-836 interchange: elevated cross highway over I-95 with four flyover ramps
 ic = combineRoads([
   buildInterchange(scene, { addCol }),
-  buildInterchange(scene, { x: -150, z: 2500, name: 'SR-70', exit: 31, northTo: 'Vice Bay', southTo: 'Sunrise City', west: [], eastEnd: 0, addCol }),
-  buildInterchange(scene, { x: 100, z: -2550, hwy: 75, name: 'SR-41', exit: 48, northTo: 'Cypress Point', southTo: 'Vice Bay', west: [], eastEnd: 0, addCol }),
-  buildInterchange(scene, { x: -4700, z: 0, hwy: 275, name: 'SR-60', exit: 5, northTo: 'Pine Ridge', southTo: 'Lake Mirage', west: [], eastEnd: 0, addCol }),
+  buildInterchange(scene, { x: wp(-150, 2500)[0], z: wp(-150, 2500)[1], name: 'SR-70', exit: 31, northTo: 'Vice Bay', southTo: 'Sunrise City', west: [], eastEnd: 0, addCol }),
+  buildInterchange(scene, { x: wp(100, -2550)[0], z: wp(100, -2550)[1], hwy: 75, name: 'SR-41', exit: 48, northTo: 'Cypress Point', southTo: 'Vice Bay', west: [], eastEnd: 0, addCol }),
+  buildInterchange(scene, { x: wp(-4700, 0)[0], z: wp(-4700, 0)[1], hwy: 275, name: 'SR-60', exit: 5, northTo: 'Pine Ridge', southTo: 'Lake Mirage', west: [], eastEnd: 0, addCol }),
 ]);
 // New Bot: SR-112 Airport Expressway, a raised 4-lane toll road from I-295 west over the countryside to the airport
-ex = buildExpressway(scene, { name: 'SR-112 Airport Expressway', points: [[-716, 560], [-1300, 560], [-1970, 120], [-1970, -40]], H: 11, W: 18, up: 160, down: 160, R: 120, addCol,
+ex = buildExpressway(scene, { name: 'SR-112 Airport Expressway', points: [[-716, 560], [-1300, 560], [-1970, 120], [-1970, -40]].map(wpt), H: 11, W: 18, up: 160, down: 160, R: 120, addCol,
   onRoad: (x, z) => HWS.some(h => h.onRoad(x, z)), toll: { at: 420, cost: 2 },
   signs: [{ at: 200, lines: ['SR-112 WEST', 'Airport'] }, { at: -260, lines: ['Airport', 'Next Exit'] }] });
 for (const d of [airport, town, swamp]) for (const q of (d.spawns?.pedestrians || [])) npcLots.push({ cx: q.x, cz: q.z, h: 2 + Math.random() * 2 });
@@ -332,13 +360,15 @@ HWS.push(
   Object.assign(buildInterstate(scene, { number: 41, name: 'Tamiami Trail', points: [[-4860, 1177], [-5200, 2200], [-6000, 2600], [-6500, 1800], [-6673, 1010]], addCol, startMile: 300 }), { us: true }),
   Object.assign(buildInterstate(scene, { number: 27, name: 'Heartland', points: [[-390, 4373], [-1200, 3600], [-2000, 3300], [-2900, 2700], [-4540, 1177]], addCol, startMile: 330 }), { us: true }),
   buildInterstate(scene, { number: 16, name: 'Central', points: [[-4460, -2273], [-3600, -1600], [-2800, -1300], [-2100, -400]], addCol, startMile: 360 }),
+  buildInterstate(scene, { number: 595, name: 'Sawgrass', points: [[-6000, 2600], [-5000, 3900], [-3000, 5600]], addCol, startMile: 390 }),
+  buildInterstate(scene, { number: 22, name: 'Suncoast', points: [[-6000, -2600], [-6500, -3300], [-7300, -4000]], addCol, startMile: 420 }),
 );
 // keep farm barns out from under flyovers (one used to block the SR-70 underpass on I-95)
-for (const [cx, cz, r] of [[-150, 1450, 140], [-150, 2500, 140], [100, -2550, 140], [-4700, 0, 140]]) {
+for (const [cx, cz, r] of [[-150, 1450, 140], [...wp(-150, 2500), 300], [...wp(100, -2550), 300], [...wp(-4700, 0), 300]]) {
   for (const h of HWS) for (const c of [...h.root.children]) if (c.isMesh && c.geometry?.type === 'BoxGeometry' && c.material?.color?.getHex() === 0xa4161a && Math.hypot(c.position.x - cx, c.position.z - cz) < r) h.root.remove(c);
   for (let k = colliders.length - 1; k >= 0; k--) { const c = colliders[k]; if (Math.abs(c.maxX - c.minX - 12) < 0.01 && Math.abs(c.maxZ - c.minZ - 12) < 0.01 && Math.hypot((c.minX + c.maxX) / 2 - cx, (c.minZ + c.maxZ) / 2 - cz) < r) colliders.splice(k, 1); }
 }
-buildRoadSigns(scene, { highways: HWS, places: [{ name: 'Vice Bay', x: 0, z: 0 }, { name: 'Airport', x: -1965, z: -211 }, ...CITIES.map(c => ({ name: c.name, x: c.center.x, z: c.center.z }))], cityRadius: 800 });
+buildRoadSigns(scene, { highways: HWS, places: [{ name: 'Vice Bay', x: 0, z: 0 }, { name: 'Airport', x: AIRC[0], z: AIRC[1] }, ...CITIES.map(c => ({ name: c.name, x: c.center.x, z: c.center.z }))], cityRadius: 800 });
 // clear roadside scenery (billboards/barns) that lands on another leg of a highway at sharp bends
 { const onAnyHw = (x, z, pad) => HWS.some(h => h.nearest(x, z).dist < h.width / 2 + pad);
   for (let k = colliders.length - 1; k >= 0; k--) { const c = colliders[k], w = c.maxX - c.minX, d = c.maxZ - c.minZ; if (!((Math.abs(w - 1) < 0.01 && Math.abs(d - 1) < 0.01) || (Math.abs(w - 12) < 0.01 && Math.abs(d - 12) < 0.01))) continue; const cx = (c.minX + c.maxX) / 2, cz = (c.minZ + c.maxZ) / 2; if (onAnyHw(cx, cz, w > 2 ? 8 : 3)) colliders.splice(k, 1); }
@@ -349,9 +379,10 @@ const isLanes = [{ z: IS.z + 3.2, dir: 1 }, { z: IS.z + 9, dir: 1 }, { z: IS.z -
 const tl = new TrafficLights(scene);
 for (const ix of lines) for (const iz of lines) if (Math.abs(ix) < HALF && Math.abs(iz) < HALF) tl.addIntersection(ix, iz, RW);
 // Mika's stunt jumps + New Bot 1's Bay Supply Co. shops
-stunts = buildStuntJumps(scene, { addCol });
+stunts = buildStuntJumps(scene, { addCol, spots: STUNT_SPOTS.map(q => { const [x, z] = wp(q.x, q.z); return { ...q, x, z }; }) });
 const SHOPS = [{ x: lines[3] + 10, z: lines[2] + 10 }, { x: -440, z: 10 }, ...CITIES.map(c => ({ x: c.center.x + 10, z: c.center.z + 10 }))];
 for (const sh of SHOPS) { const m = M.makeMarker(0x00c2ff); m.position.set(sh.x, 1.5, sh.z); m.scale.set(1.4, 0.6, 1.4); scene.add(m); sh.mesh = m; }
+for (const pr of PROPERTIES) if (pr.x !== undefined) [pr.x, pr.z] = wp(pr.x, pr.z);
 resolveProperties(POI);
 for (const pr of PROPERTIES) { const m = M.makeMarker(pr.owned ? 0x3ddc84 : 0xffcf3c); m.position.set(pr.x, 1.5, pr.z); m.scale.set(1.6, 0.7, 1.6); scene.add(m); pr.mesh = m; pr._own = pr.owned; }
 const poiMarkers = {};
@@ -869,6 +900,7 @@ const MISSIONS = [
     }, end(m) { scene.remove(m.marker); } },
 ];
 function routeRace({ id, name, reward, at, t, intro, checks }) {
+  at = wp(at[0], at[1]); checks = checks.map(wpt); t = Math.round(t * (1 + (WORLD_X - 1) * 0.8));
   return { id, name, reward, at, intro,
     start(m) { m.t = t; m.k = 0; m.target = { x: checks[0][0], z: checks[0][1] }; m.marker = M.makeMarker(0xff2d6f); m.marker.scale.set(3, 2.2, 3); scene.add(m.marker); setObjective('Get in a <b>car</b>'); },
     update(m, dt) {
@@ -880,7 +912,7 @@ function routeRace({ id, name, reward, at, t, intro, checks }) {
 }
 function taxiEnd(m) { const n = m.fares, e = m.earned; endMission(); bigText('SHIFT OVER', '#3ddc84', `${n} fare${n === 1 ? '' : 's'} · +$${e}`); }
 const niceLbl = t => t.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
-const TAXI_DEST = [POI.beach, POI.diner, POI.garage, POI.gas, POI.dock, POI.spray, { x: -450, z: 0, label: 'Vice Bay Heights' }, { x: -1970, z: -150, label: 'Airport' }, { x: -150, z: 1850, label: 'Palmetto Springs' }].filter(q => q && q.label);
+const TAXI_DEST = [POI.beach, POI.diner, POI.garage, POI.gas, POI.dock, POI.spray, { x: -450, z: 0, label: 'Vice Bay Heights' }, { x: AIRC[0], z: AIRC[1] + 61, label: 'Airport' }, { x: TOWNC[0], z: TOWNC[1], label: 'Palmetto Springs' }].filter(q => q && q.label);
 const dist2 = t => { const px = player.car ? player.car.x : player.x, pz = player.car ? player.car.z : player.z; return Math.hypot(t.x - px, t.z - pz); };
 function refreshMissionMarkers() {
   missionMarkers.forEach(m => scene.remove(m.mesh)); missionMarkers.length = 0;
@@ -927,13 +959,14 @@ function die(text, color) {
 // ---------- save / load ----------
 function saveGame(quiet) {
   const px = player.car ? player.car.x : player.x, pz = player.car ? player.car.z : player.z;
-  localStorage.setItem(SAVE_KEY, JSON.stringify({ money: player.money, health: player.health, armor: player.armor, done: state.done, x: px, z: pz, time: state.time, weapon: player.weapon, at: Date.now() }));
+  localStorage.setItem(SAVE_KEY, JSON.stringify({ money: player.money, health: player.health, armor: player.armor, done: state.done, x: px, z: pz, time: state.time, weapon: player.weapon, w5: 1, at: Date.now() }));
   if (!quiet) showMsg('Game saved'); else showMsg('Progress saved', 1.5);
 }
 function loadGame() {
   const s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); if (!s) { showMsg('No saved game yet'); return false; }
   if (player.car) exitCar(true); endMission();
   Object.assign(player, { money: s.money, health: s.health, armor: s.armor, weapon: s.weapon ?? 1, x: s.x, z: s.z, y: 0 });
+  if (!s.w5) [player.x, player.z] = wp(s.x, s.z);
   if (insideAny(player.x, player.z, 0.5)) { player.x = POI.safe.x; player.z = POI.safe.z; }
   state.done = s.done || []; state.time = s.time ?? 0.4; state.wanted = 0; vehicles.filter(v => v.type === 'police').forEach(removeVehicle);
   refreshMissionMarkers(); showMsg('Game loaded'); return true;
@@ -1219,14 +1252,14 @@ function updateEnv(dt) {
 
 // ---------- minimap ----------
 const mmEl = $('minimap'), mm = mmEl.getContext('2d'); let MMS = 280, MMR = 170, mmBig = false; // canvas px, world range radius in units
-const mmView = { cx: 0, cz: 0, R: 800 }, MM_ZOOMS = [300, 600, 1200, 2400];
+const mmView = { cx: 0, cz: 0, R: 800 }, MM_ZOOMS = [300, 600, 1200, 2400, 6000, 15000];
 function playerXZ() { return player.car ? [player.car.x, player.car.z] : [player.x, player.z]; }
 function toggleBigMap(e) {
   if (e) { e.preventDefault(); e.stopPropagation(); } mmBig = !mmBig; mmEl.classList.toggle('big', mmBig); MMS = mmBig ? 720 : 280; MMR = mmBig ? mmView.R : 170; mmEl.width = mmEl.height = MMS;
   if (mmBig) { const [x, z] = playerXZ(); mmView.cx = x; mmView.cz = z; }
   $('mmhint').style.display = $('mmctl').style.display = mmBig ? 'flex' : 'none';
 }
-function mmZoom(f) { mmView.R = clamp(mmView.R * f, 150, 6000); MMR = mmView.R; }
+function mmZoom(f) { mmView.R = clamp(mmView.R * f, 150, 30000); MMR = mmView.R; }
 function mmToWorld(cxp, cyp) { const r = mmEl.getBoundingClientRect(), u = (cxp - r.left) / r.width * MMS, v = (cyp - r.top) / r.height * MMS, sc = MMS / 2 / MMR; return [mmView.cx + (u - MMS / 2) / sc, mmView.cz + (v - MMS / 2) / sc]; }
 function setWaypoint(x, z) {
   const w = state.waypoint; if (w && Math.hypot(w.x - x, w.z - z) < MMR * 0.06) { state.waypoint = null; showMsg('Waypoint cleared', 1.5); return; }
@@ -1243,7 +1276,7 @@ function setWaypoint(x, z) {
   });
   mmEl.addEventListener('pointermove', e => {
     if (!mmBig || !ptrs.has(e.pointerId)) return; e.preventDefault(); ptrs.set(e.pointerId, [e.clientX, e.clientY]);
-    if (pinch && ptrs.size >= 2) { const [a, b] = [...ptrs.values()]; const d = Math.hypot(a[0] - b[0], a[1] - b[1]); mmView.R = clamp(pinch.R * pinch.d / Math.max(20, d), 150, 6000); MMR = mmView.R; return; }
+    if (pinch && ptrs.size >= 2) { const [a, b] = [...ptrs.values()]; const d = Math.hypot(a[0] - b[0], a[1] - b[1]); mmView.R = clamp(pinch.R * pinch.d / Math.max(20, d), 150, 30000); MMR = mmView.R; return; }
     if (drag) { const r = mmEl.getBoundingClientRect(), k = (MMR * 2) / r.width, dx = e.clientX - drag.x, dy = e.clientY - drag.y; if (Math.hypot(dx, dy) > 8) drag.moved = true; if (drag.moved) { mmView.cx = drag.cx - dx * k; mmView.cz = drag.cz - dy * k; } }
   });
   const up = e => { if (!ptrs.has(e.pointerId)) return; ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch = null; if (ptrs.size === 0 && drag) { if (!drag.moved && mmBig) setWaypoint(...mmToWorld(e.clientX, e.clientY)); drag = null; } };
@@ -1276,10 +1309,10 @@ function drawMinimap() {
   mm.strokeStyle = '#4a5a8a'; mm.lineCap = 'round'; for (const h of HWS) { mm.lineWidth = h.width * sc; mm.beginPath(); h.segs.forEach((g, i) => { if (!i) mm.moveTo(X(g.a.x), Z(g.a.z)); mm.lineTo(X(g.b.x), Z(g.b.z)); }); mm.stroke(); }
   if (ex) { mm.strokeStyle = '#c49a5b'; mm.lineWidth = Math.max(2, ex.width * sc); mm.beginPath(); ex.pts.forEach((q, k) => k % 4 ? 0 : (k ? mm.lineTo(X(q.x), Z(q.z)) : mm.moveTo(X(q.x), Z(q.z)))); mm.stroke(); }
   if (ic) { mm.strokeStyle = '#7b8cc4'; for (const P of ic.paths) { mm.lineWidth = Math.max(2, P.width * sc); mm.beginPath(); P.points.forEach(([qx, qz], k) => k ? mm.lineTo(X(qx), Z(qz)) : mm.moveTo(X(qx), Z(qz))); mm.stroke(); } }
-  mm.fillStyle = '#8a8a90'; for (const rz of [-110, 110]) mm.fillRect(X(-1970 - 230), Z(-211 + rz - 15), 460 * sc, 30 * sc); mm.fillRect(X(-1970 - 130), Z(-211 - 35), 260 * sc, 70 * sc); mm.fillRect(X(-1840), Z(-51), 140 * sc, 20 * sc);
+  mm.fillStyle = '#8a8a90'; for (const rz of [-110, 110]) mm.fillRect(X(AOX + -1970 - 230), Z(AOZ + -211 + rz - 15), 460 * sc, 30 * sc); mm.fillRect(X(AOX + -1970 - 130), Z(AOZ + -211 - 35), 260 * sc, 70 * sc); mm.fillRect(X(AOX + -1840), Z(AOZ + -51), 140 * sc, 20 * sc);
   for (const r of [...LINKS, ...downtown.streets, ...SWROADS]) mm.fillRect(X(r.minX), Z(r.minZ), (r.maxX - r.minX) * sc, (r.maxZ - r.minZ) * sc);
   mm.fillStyle = '#3f6a5a'; for (const r of swamp.waterRects) mm.fillRect(X(r.minX), Z(r.minZ), (r.maxX - r.minX) * sc, (r.maxZ - r.minZ) * sc); mm.fillStyle = '#8a8a90';
-  mm.fillRect(X(-160), Z(1700), 20 * sc, 300 * sc); mm.fillRect(X(-300), Z(1840), 300 * sc, 20 * sc);
+  mm.fillRect(X(TOX + -160), Z(TOZ + 1700), 20 * sc, 300 * sc); mm.fillRect(X(TOX + -300), Z(TOZ + 1840), 300 * sc, 20 * sc);
   mm.fillStyle = '#999'; for (const l of lots) mm.fillRect(X(l.cx - LOT / 2), Z(l.cz - LOT / 2), LOT * sc, LOT * sc);
   mm.fillStyle = '#5fae5a'; for (const l of lots) if (l.park) mm.fillRect(X(l.cx - LOT / 2 + 3), Z(l.cz - LOT / 2 + 3), (LOT - 6) * sc, (LOT - 6) * sc);
   for (const c of CITIES) { const b = c.bounds; if (X(b.maxX) < 0 || X(b.minX) > MMS || Z(b.maxZ) < 0 || Z(b.minZ) > MMS) continue; mm.fillStyle = '#999'; mm.fillRect(X(b.minX), Z(b.minZ), (b.maxX - b.minX) * sc, (b.maxZ - b.minZ) * sc); mm.fillStyle = '#5fae5a'; for (const p of c.parks) mm.fillRect(X(p.x - p.s / 2), Z(p.z - p.s / 2), p.s * sc, p.s * sc); mm.fillStyle = '#555'; for (const r of c.streets) mm.fillRect(X(r.minX), Z(r.minZ), (r.maxX - r.minX) * sc, (r.maxZ - r.minZ) * sc); }
@@ -1288,7 +1321,7 @@ function drawMinimap() {
   { const lab = (x, z, t) => { const lx = X(x), lz = Z(z); if (lx < 10 || lz < 10 || lx > MMS - 10 || lz > MMS - 10) return; const f = mmBig ? 15 : 10; mm.font = `bold ${f}px Arial`; mm.textAlign = 'center'; const w = mm.measureText(t).width + 8; mm.fillStyle = '#1d4fb8'; mm.fillRect(lx - w / 2, lz - f * 0.8, w, f * 1.4); mm.strokeStyle = '#fff'; mm.lineWidth = 1.5; mm.strokeRect(lx - w / 2, lz - f * 0.8, w, f * 1.4); mm.fillStyle = '#fff'; mm.fillText(t, lx, lz + f * 0.35); };
     for (const h of HWS) { const sp = mmBig ? MMR * 0.5 : 160; let acc = -sp / 2; for (const g of h.segs) { let t0 = 0; while (acc + g.len * (1 - t0) >= 0) { const need = -acc; const t = t0 + need / g.len; if (t > 1) break; lab(g.a.x + (g.b.x - g.a.x) * t, g.a.z + (g.b.z - g.a.z) * t, (h.us ? 'US ' : 'I-') + h.number); t0 = t; acc = -sp; } acc += g.len * (1 - t0); } }
     if (MMR < 1500) { lab((IS.x0 + IS.x1) / 2 - 40, IS.z, 'I-395'); lab(FW.x, -60, 'VB-1'); }
-    if (mmBig) { mm.font = 'bold 18px Arial'; mm.fillStyle = '#fff'; mm.textAlign = 'center'; mm.fillText('VICE BAY', X(0), Z(0)); mm.fillText('PORT CORAL', X(20), Z(-300)); mm.fillText('VICE BAY INTL ✈', X(-1970), Z(-260)); mm.fillText('PALMETTO SPRINGS', X(-150), Z(1830)); mm.fillText('VICE BAY HEIGHTS', X(-450), Z(-185)); mm.fillText('GATOR GLADES', X(100), Z(-2125)); for (const c of CITIES) mm.fillText(c.name.toUpperCase(), X(c.center.x), Z(c.bounds.minZ - 14)); } }
+    if (mmBig) { mm.font = 'bold 18px Arial'; mm.fillStyle = '#fff'; mm.textAlign = 'center'; mm.fillText('VICE BAY', X(0), Z(0)); mm.fillText('PORT CORAL', X(20), Z(-300)); mm.fillText('VICE BAY INTL ✈', X(AOX - 1970), Z(AOZ - 260)); mm.fillText('PALMETTO SPRINGS', X(TOX - 150), Z(TOZ + 1830)); mm.fillText('VICE BAY HEIGHTS', X(-450), Z(-185)); mm.fillText('GATOR GLADES', X(SWC[0]), Z(SWC[1] - 225)); for (const c of CITIES) mm.fillText(c.name.toUpperCase(), X(c.center.x), Z(c.bounds.minZ - 14)); } }
   const dot = (x, z, col, r = 5, txt) => { if (mmBig) r *= 1.3; mm.fillStyle = col; mm.beginPath(); mm.arc(clamp(X(x), 8, MMS - 8), clamp(Z(z), 8, MMS - 8), r, 0, 7); mm.fill(); if (txt) { mm.fillStyle = '#fff'; mm.font = 'bold 11px Arial'; mm.textAlign = 'center'; mm.fillText(txt, clamp(X(x), 8, MMS - 8), clamp(Z(z), 8, MMS - 8) + 4); } };
   const tgt = state.mission?.target;
   if (tgt) { const r = route(px, pz, tgt.x, tgt.z); if (tgt.z < -EDGE || pz < -EDGE) { r.length = 0; if (pz < -EDGE && tgt.z > -EDGE) { r.push([px, pz], [0, pz], [0, -180], ...route(0, -180, tgt.x, tgt.z)); } else if (tgt.z < -EDGE && pz > -EDGE) { r.push(...route(px, pz, 0, -180), [0, -180], [0, tgt.z], [tgt.x, tgt.z]); } else r.push([px, pz], [0, pz], [0, tgt.z], [tgt.x, tgt.z]); } mm.strokeStyle = '#ff5e7e'; mm.lineWidth = 5; mm.beginPath(); r.forEach(([x, z], i) => i ? mm.lineTo(X(x), Z(z)) : mm.moveTo(X(x), Z(z))); mm.stroke(); }
