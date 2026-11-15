@@ -416,17 +416,32 @@ function ensureFixed(force) {
   }
 }
 ensureFixed(true);
+// traffic grids: the original city plus every newer street grid (cities, downtown)
+const MAIN_GRID = { cx: 0, cz: 0, lines, B, half: HALF };
+const GRIDS = [...CITIES.map(c => ({ cx: c.center.x, cz: c.center.z, lines: c.lines, B: c.lines[1] - c.lines[0], half: c.lines[c.lines.length - 1] })),
+  { cx: -450, cz: 0, lines: [-160, -80, 0, 80, 160], B: 80, half: 160 }];
+function gridAt(x, z, m = 0) { return GRIDS.find(G => Math.abs(x - G.cx) < G.half + m && Math.abs(z - G.cz) < G.half + m) || null; }
+function gridRoadPointNear(G, x, z, minD, maxD) {
+  for (let i = 0; i < 30; i++) {
+    const ax = Math.random() < 0.5 ? 0 : 1, s = Math.random() < 0.5 ? 1 : -1, L = pick(G.lines.slice(1, -1).length ? G.lines : G.lines), along = rand(-G.half + 10, G.half - 10);
+    const lx = ax === 0 ? along : L + laneOff(ax, s), lz = ax === 0 ? L + laneOff(ax, s) : along, wx = G.cx + lx, wz = G.cz + lz, d = Math.hypot(wx - x, wz - z);
+    if (d >= minD && d <= maxD) return { x: wx, z: wz, ax, s };
+  }
+  return null;
+}
 function spawnTraffic(near) {
-  const p = near ? roadPointNear(near.x, near.z, 45, 140) : roadPointNear(0, 0, 0, 400);
+  const G = near ? gridAt(near.x, near.z, 140) : null;
+  const p = G ? gridRoadPointNear(G, near.x, near.z, 45, 140) : near ? roadPointNear(near.x, near.z, 45, 140) : roadPointNear(0, 0, 0, 400);
   if (!p) return;
   if (vehicles.some(o => Math.hypot(o.x - p.x, o.z - p.z) < 10)) return;
   const dx = p.ax === 0 ? p.s : 0, dz = p.ax === 1 ? p.s : 0;
   const r = Math.random(), mk = r < 0.07 ? V.makeSportsCar(pick(M.CAR_COLORS)) : r < 0.15 ? V.makeMotorcycle(pick(M.CAR_COLORS)) : r < 0.22 ? V.makeTruck() : r < 0.27 ? V.makeBus() : null;
-  const v = addVehicle('traffic', p.x, p.z, headingOf(dx, dz), mk ? { mesh: mk } : {}); v.ax = p.ax; v.s = p.s; v.speed = 8;
+  const v = addVehicle('traffic', p.x, p.z, headingOf(dx, dz), mk ? { mesh: mk } : {}); v.ax = p.ax; v.s = p.s; v.speed = 8; v.grid = G; if (gfx) gfx.upgrade(v.mesh);
 }
 const laneOff = (ax, s) => ax === 0 ? LANE * s : -LANE * s;
 function updateTraffic(v, dt) {
-  const pos = [v.x, v.z], along = pos[v.ax], cross = pos[1 - v.ax];
+  const G = v.grid || MAIN_GRID, ox = G.cx, oz = G.cz;
+  const pos = [v.x - ox, v.z - oz], along = pos[v.ax], cross = pos[1 - v.ax];
   const [fx, fz] = [v.ax === 0 ? v.s : 0, v.ax === 1 ? v.s : 0];
   // blocked ahead?
   let target = 12;
@@ -434,29 +449,29 @@ function updateTraffic(v, dt) {
   for (const o of vehicles) if (o !== v && !o.dead) check(o.x, o.z, 11);
   if (player.mode === 'foot') check(player.x, player.z, 8);
   for (const p of peds) if (p.state !== 'dead') check(p.x, p.z, 6);
-  if (!tl.canGo(v.x, v.z, fx, fz)) target = 0;
+  if (G === MAIN_GRID && !tl.canGo(v.x, v.z, fx, fz)) target = 0;
   v.speed += clamp(target - v.speed, -20 * dt, 6 * dt);
   // intersection planning
-  const roadC = lines.reduce((a, b) => Math.abs(b - (cross - laneOff(v.ax, v.s))) < Math.abs(a - (cross - laneOff(v.ax, v.s))) ? b : a);
+  const roadC = G.lines.reduce((a, b) => Math.abs(b - (cross - laneOff(v.ax, v.s))) < Math.abs(a - (cross - laneOff(v.ax, v.s))) ? b : a);
   if (!v.plan) {
-    let L = null; for (const l of lines) if ((l - along) * v.s > 0.5 && (L === null || Math.abs(l - along) < Math.abs(L - along))) L = l;
+    let L = null; for (const l of G.lines) if ((l - along) * v.s > 0.5 && (L === null || Math.abs(l - along) < Math.abs(L - along))) L = l;
     if (L !== null && Math.abs(L - along) < 14) {
       const opts = [];
-      if (Math.abs(L + v.s * B) <= HALF + 1) opts.push({ straight: true, L }, { straight: true, L });
-      for (const s2 of [1, -1]) if (Math.abs(roadC + s2 * B) <= HALF + 1) opts.push({ s2, L, at: L + laneOff(1 - v.ax, s2) });
+      if (Math.abs(L + v.s * G.B) <= G.half + 1) opts.push({ straight: true, L }, { straight: true, L });
+      for (const s2 of [1, -1]) if (Math.abs(roadC + s2 * G.B) <= G.half + 1) opts.push({ s2, L, at: L + laneOff(1 - v.ax, s2) });
       v.plan = opts.length ? pick(opts) : { s2: -v.s, L, at: L };
     } else if (L === null) { v.plan = { uturn: true }; }
   }
   const step = v.speed * dt; let na = along + step * v.s;
   if (v.plan) {
-    if (v.plan.uturn) { v.s = -v.s; v.plan = null; const c = roadC + laneOff(v.ax, v.s); if (v.ax === 0) v.z = c; else v.x = c; na = along; }
+    if (v.plan.uturn) { v.s = -v.s; v.plan = null; const c = roadC + laneOff(v.ax, v.s); if (v.ax === 0) v.z = c + oz; else v.x = c + ox; na = along; }
     else if (v.plan.straight) { if ((na - v.plan.L) * v.s > 8) v.plan = null; }
     else if ((na - v.plan.at) * v.s >= 0) {
       const newCross = v.plan.at; const oldAx = v.ax; v.ax = 1 - oldAx; v.s = v.plan.s2; v.plan = null;
-      if (oldAx === 0) { v.x = newCross; } else { v.z = newCross; } na = null; v.speed *= 0.6;
+      if (oldAx === 0) { v.x = newCross + ox; } else { v.z = newCross + oz; } na = null; v.speed *= 0.6;
     }
   }
-  if (na !== null) { if (v.ax === 0) v.x = na; else v.z = na; }
+  if (na !== null) { if (v.ax === 0) v.x = na + ox; else v.z = na + oz; }
   const th = headingOf(v.ax === 0 ? v.s : 0, v.ax === 1 ? v.s : 0);
   v.heading += wrapA(th - v.heading) * Math.min(1, dt * 8);
 }
