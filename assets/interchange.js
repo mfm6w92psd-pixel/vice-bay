@@ -46,29 +46,10 @@ function samplePath(fn, len, step = 3) {
 }
 function pathLen(fn) { let L = 0, prev = fn(0); for (let i = 1; i <= 200; i++) { const q = fn(i / 200); L += Math.hypot(q.x - prev.x, q.z - prev.z); prev = q; } return L; }
 
-export function buildInterchange(scene, { x: CX = -150, z: CZ = 1450, H = 10, addCol = () => {}, west = [[-650, 1450], [-700, 880]], eastEnd = 300 } = {}) {
-  const root = new THREE.Group(); scene.add(root);
-  const ribbons = [];
-  const MW = 24, RW = 10, FLAT = 160, RISE = 170;     // mainline width, ramp width, half flat length, ramp-up length
-  // main flyover along x at z = CZ
-  const x0 = CX - FLAT - RISE - 60, x1 = CX + FLAT + RISE + 40;
-  const mainY = x => { const d = Math.abs(x - CX); return H * smooth(1 - (d - FLAT) / RISE); };
-  ribbons.push({ name: 'SR-836 Flyover', kind: 'main', width: MW, pts: samplePath(t => { const x = x0 + (x1 - x0) * t; return new THREE.Vector3(x, mainY(x), CZ); }, x1 - x0) });
-  // four flyover connector ramps (quadratic bezier, ground at I-95 shoulder -> deck edge)
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
-    const S = new THREE.Vector3(CX + sx * 21, 0, CZ + sz * 210), Q = new THREE.Vector3(CX + sx * 21, 0, CZ + sz * 17), E = new THREE.Vector3(CX + sx * 135, 0, CZ + sz * 17);
-    const fn = t => { const u = 1 - t, p = S.clone().multiplyScalar(u * u).addScaledVector(Q, 2 * u * t).addScaledVector(E, t * t); p.y = H * smooth(t * 1.15); return p; };
-    ribbons.push({ name: 'I-95 / SR-836 Ramp', kind: 'ramp', width: RW, pts: samplePath(fn, pathLen(fn)) });
-  }
-  // ground continuations (west to the I-295 / I-4 junction, short east spur to an overlook)
-  const wpts = [[x0, CZ], ...west];
-  for (let i = 0; i < wpts.length - 1; i++) {
-    const [ax, az] = wpts[i], [bx, bz] = wpts[i + 1];
-    ribbons.push({ name: 'SR-836', kind: 'main', width: MW, pts: samplePath(t => new THREE.Vector3(ax + (bx - ax) * t, 0, az + (bz - az) * t), Math.hypot(bx - ax, bz - az)) });
-  }
-  if (eastEnd > x1) ribbons.push({ name: 'SR-836', kind: 'main', width: MW, pts: samplePath(t => new THREE.Vector3(x1 + (eastEnd - x1) * t, 0, CZ), eastEnd - x1) });
-  for (const r of ribbons) { r.min = new THREE.Vector2(Infinity, Infinity); r.max = new THREE.Vector2(-Infinity, -Infinity); for (const s of r.pts) { r.min.x = Math.min(r.min.x, s.p.x); r.min.y = Math.min(r.min.y, s.p.z); r.max.x = Math.max(r.max.x, s.p.x); r.max.y = Math.max(r.max.y, s.p.z); } }
 
+// shared core: collision surfaces + meshes + AI lanes for a list of 3D road ribbons
+function roadSystem(root, ribbons, addCol) {
+  for (const r of ribbons) { r.min = new THREE.Vector2(Infinity, Infinity); r.max = new THREE.Vector2(-Infinity, -Infinity); for (const s of r.pts) { r.min.x = Math.min(r.min.x, s.p.x); r.min.y = Math.min(r.min.y, s.p.z); r.max.x = Math.max(r.max.x, s.p.x); r.max.y = Math.max(r.max.y, s.p.z); } }
   // nearest point on a ribbon centreline -> { d (lateral), y, s }
   const near = (r, x, z) => {
     const m = r.width / 2 + 1; if (x < r.min.x - m || x > r.max.x + m || z < r.min.y - m || z > r.max.y + m) return null;
@@ -134,6 +115,39 @@ export function buildInterchange(scene, { x: CX = -150, z: CZ = 1450, H = 10, ad
       else { root.add(box(1.8, h, 1.8, 0xbdb8ae, s.p.x, h / 2, s.p.z)); addCol(s.p.x, s.p.z, 2, 2, h - 0.3); }
     });
   }
+  // AI lanes: 2 each way on the mainline (right-hand traffic), 1 each way on ramps
+  const lanes = [];
+  for (const r of ribbons) {
+    const offs = r.kind === 'main' ? [2.6, 7.4] : [2.5];
+    for (const o of offs) for (const dir of [1, -1]) { const pts = r.pts.map(s => s.p.clone().addScaledVector(s.right, dir * o)); lanes.push({ points: dir > 0 ? pts : pts.reverse(), dir, road: r.name }); }
+  }
+  const paths = ribbons.map(r => ({ points: r.pts.map(s => [s.p.x, s.p.z]), width: r.width, name: r.name }));
+  return { heightAt, clampToDeck, inZone, roadName, lanes, paths, surfaces };
+}
+
+export function buildInterchange(scene, { x: CX = -150, z: CZ = 1450, H = 10, addCol = () => {}, west = [[-650, 1450], [-700, 880]], eastEnd = 300, name = 'SR-836', hwy = 95, northTo = 'Port Coral', southTo = 'Sunrise City', exit = 12 } = {}) {
+  const root = new THREE.Group(); scene.add(root);
+  const ribbons = [];
+  const MW = 24, RW = 10, FLAT = 160, RISE = 170;     // mainline width, ramp width, half flat length, ramp-up length
+  // main flyover along x at z = CZ
+  const x0 = CX - FLAT - RISE - 60, x1 = CX + FLAT + RISE + 40;
+  const mainY = x => { const d = Math.abs(x - CX); return H * smooth(1 - (d - FLAT) / RISE); };
+  ribbons.push({ name: `${name} Flyover`, kind: 'main', width: MW, pts: samplePath(t => { const x = x0 + (x1 - x0) * t; return new THREE.Vector3(x, mainY(x), CZ); }, x1 - x0) });
+  // four flyover connector ramps (quadratic bezier, ground at I-95 shoulder -> deck edge)
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    const S = new THREE.Vector3(CX + sx * 21, 0, CZ + sz * 210), Q = new THREE.Vector3(CX + sx * 21, 0, CZ + sz * 17), E = new THREE.Vector3(CX + sx * 135, 0, CZ + sz * 17);
+    const fn = t => { const u = 1 - t, p = S.clone().multiplyScalar(u * u).addScaledVector(Q, 2 * u * t).addScaledVector(E, t * t); p.y = H * smooth(t * 1.15); return p; };
+    ribbons.push({ name: `I-${hwy} / ${name} Ramp`, kind: 'ramp', width: RW, pts: samplePath(fn, pathLen(fn)) });
+  }
+  // ground continuations (west to the I-295 / I-4 junction, short east spur to an overlook)
+  const wpts = [[x0, CZ], ...west];
+  for (let i = 0; i < wpts.length - 1; i++) {
+    const [ax, az] = wpts[i], [bx, bz] = wpts[i + 1];
+    ribbons.push({ name, kind: 'main', width: MW, pts: samplePath(t => new THREE.Vector3(ax + (bx - ax) * t, 0, az + (bz - az) * t), Math.hypot(bx - ax, bz - az)) });
+  }
+  if (eastEnd > x1) ribbons.push({ name, kind: 'main', width: MW, pts: samplePath(t => new THREE.Vector3(x1 + (eastEnd - x1) * t, 0, CZ), eastEnd - x1) });
+
+  const sys = roadSystem(root, ribbons, addCol); const { heightAt, clampToDeck, inZone, roadName, lanes, paths } = sys;
   // street lights on the flyover
   for (let x = CX - FLAT; x <= CX + FLAT; x += 40) {
     const y = mainY(x);
@@ -147,22 +161,48 @@ export function buildInterchange(scene, { x: CX = -150, z: CZ = 1450, H = 10, ad
     const s1 = greenSign(a, 9, 2.8); s1.position.set(-span / 4, 6.1, 0.3); g.add(s1);
     const s2 = greenSign(b, 9, 2.8); s2.position.set(span / 4, 6.1, 0.3); g.add(s2);
   };
-  gantry(CX - FLAT + 20, CZ, H, -Math.PI / 2, MW, ['I-95 NORTH', 'Port Coral'], ['I-95 SOUTH', 'Sunrise City']);
-  gantry(CX + FLAT - 20, CZ, H, Math.PI / 2, MW, ['I-95 SOUTH', 'Sunrise City'], ['I-95 NORTH', 'Port Coral']);
-  gantry(CX, CZ - 300, 0, 0, 32, ['EXIT 12', 'SR-836 WEST'], ['EXIT 12', 'SR-836 EAST']);
-  gantry(CX, CZ + 300, 0, Math.PI, 32, ['EXIT 12', 'SR-836 EAST'], ['EXIT 12', 'SR-836 WEST']);
-  { const sh = makeShield(95, 3); sh.position.set(CX + 1, H + 2.6, CZ - MW / 2 - 1.6); sh.rotation.y = Math.PI; root.add(sh); const sh2 = makeShield(95, 3); sh2.position.set(CX - 1, H + 2.6, CZ + MW / 2 + 1.6); root.add(sh2); }
+  gantry(CX - FLAT + 20, CZ, H, -Math.PI / 2, MW, [`I-${hwy} NORTH`, northTo], [`I-${hwy} SOUTH`, southTo]);
+  gantry(CX + FLAT - 20, CZ, H, Math.PI / 2, MW, [`I-${hwy} SOUTH`, southTo], [`I-${hwy} NORTH`, northTo]);
+  gantry(CX, CZ - 300, 0, 0, 32, [`EXIT ${exit}`, `${name} WEST`], [`EXIT ${exit}`, `${name} EAST`]);
+  gantry(CX, CZ + 300, 0, Math.PI, 32, [`EXIT ${exit}`, `${name} EAST`], [`EXIT ${exit}`, `${name} WEST`]);
+  { const sh = makeShield(hwy, 3); sh.position.set(CX + 1, H + 2.6, CZ - MW / 2 - 1.6); sh.rotation.y = Math.PI; root.add(sh); const sh2 = makeShield(hwy, 3); sh2.position.set(CX - 1, H + 2.6, CZ + MW / 2 + 1.6); root.add(sh2); }
   // landscaping in the four quadrants
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
     const g = new THREE.Mesh(new THREE.CircleGeometry(60, 24), new THREE.MeshStandardMaterial({ color: 0x5f9e47 })); g.rotation.x = -Math.PI / 2; g.position.set(CX + sx * 85, 0.012, CZ + sz * 85); g.receiveShadow = true; root.add(g);
     for (let k = 0; k < 5; k++) { const p = makePalm(); p.position.set(CX + sx * (60 + k * 9), 0, CZ + sz * (110 - k * 9)); if (!inZone(p.position.x, p.position.z)) root.add(p); }
   }
-  // AI lanes: 2 each way on the mainline (right-hand traffic), 1 each way on ramps
-  const lanes = [];
-  for (const r of ribbons) {
-    const offs = r.kind === 'main' ? [2.6, 7.4] : [2.5];
-    for (const o of offs) for (const dir of [1, -1]) { const pts = r.pts.map(s => s.p.clone().addScaledVector(s.right, dir * o)); lanes.push({ points: dir > 0 ? pts : pts.reverse(), dir, road: r.name }); }
-  }
-  const paths = ribbons.map(r => ({ points: r.pts.map(s => [s.p.x, s.p.z]), width: r.width, name: r.name }));
   return { root, heightAt, clampToDeck, inZone, roadName, paths, lanes, deckY: H, center: { x: CX, z: CZ } };
+}
+
+// Elevated expressway along a 2D polyline: ramps up from the ground at both ends, flat at height H in between.
+//   const ex = buildExpressway(scene, { name: 'Bayshore Expressway', points: [[x,z],...], H: 9, addCol });
+//   same API as buildInterchange: heightAt, clampToDeck, inZone, roadName, paths, lanes
+export function buildExpressway(scene, { name = 'Bayshore Expressway', points, H = 9, rampLen = 150, width = 18, addCol = () => {}, lights = true, shield = 'EXPWY' } = {}) {
+  const root = new THREE.Group(); scene.add(root);
+  const curve = new THREE.CatmullRomCurve3(points.map(([x, z]) => new THREE.Vector3(x, 0, z)), false, 'centripetal', 0.3);
+  const L = curve.getLength();
+  const fn = t => { const p = curve.getPointAt(t), d = t * L; p.y = H * smooth(Math.min(d, L - d) / rampLen); return p; };
+  const ribbons = [{ name, kind: 'main', width, pts: samplePath(fn, L) }];
+  const sys = roadSystem(root, ribbons, addCol);
+  const pts = ribbons[0].pts;
+  if (lights) { let acc = 0; pts.forEach((s, i) => { if (i) acc += s.p.distanceTo(pts[i - 1].p); if (acc < 45 || s.p.y < H - 0.2) return; acc = 0;
+    for (const sd of [-1, 1]) { const q = s.p.clone().addScaledVector(s.right, sd * (width / 2 - 0.4)); root.add(box(0.2, 7, 0.2, 0x666666, q.x, q.y + 3.5, q.z)); const lq = s.p.clone().addScaledVector(s.right, sd * (width / 2 - 1.3)); const l = box(1.6, 0.18, 0.4, 0xffffcc, lq.x, q.y + 7, lq.z); l.material = l.material.clone(); l.material.emissive = new THREE.Color(0xffe08a); l.material.emissiveIntensity = 1.2; root.add(l); } }); }
+  // entrance signs at both ends
+  for (const [s, flip] of [[pts[Math.min(8, pts.length - 1)], 0], [pts[Math.max(0, pts.length - 9)], 1]]) {
+    const sg = greenSign([name.toUpperCase(), flip ? 'SOUTH' : 'NORTH'], 8, 2.6); const q = s.p.clone().addScaledVector(s.right, width / 2 + 2);
+    sg.position.set(q.x, q.y + 3.2, q.z); sg.rotation.y = Math.atan2(s.dir.x, s.dir.z) + (flip ? 0 : Math.PI); root.add(sg); root.add(box(0.2, 3, 0.2, 0x888888, q.x, q.y + 1.5, q.z));
+  }
+  return { root, ...sys, deckY: H, length: L };
+}
+
+// Merge several interchanges/expressways into one object with the same API, so game.js can keep a single `ic`.
+export function combineRoads(list) {
+  return {
+    list, root: list.map(r => r.root),
+    heightAt: (x, z, y = 0) => Math.max(0, ...list.map(r => r.heightAt(x, z, y))),
+    clampToDeck: v => { for (const r of list) r.clampToDeck(v); return v; },
+    inZone: (x, z) => list.some(r => r.inZone(x, z)),
+    roadName: (x, z) => { for (const r of list) { const n = r.roadName(x, z); if (n) return n; } return null; },
+    paths: list.flatMap(r => r.paths), lanes: list.flatMap(r => r.lanes),
+  };
 }

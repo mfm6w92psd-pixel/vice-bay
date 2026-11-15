@@ -12,7 +12,8 @@ import { buildSwamp, buildDowntown, makeAirboat } from './assets/regions.js';
 import { buildCity } from './assets/cities.js';
 import { setupGraphics } from './assets/graphics.js';
 import { createNet } from './net.js';
-import { buildInterchange } from './assets/interchange.js';
+import { buildInterchange, combineRoads } from './assets/interchange.js';
+import { buildExpressway } from './assets/expressway.js';
 import { makeNPC, pickNPCType, animateNPC, setNPCPanic } from './assets/npcs.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -197,7 +198,8 @@ for (const s of [-1, 1]) addCol(FW.x + s * (FW.W / 2 + 1.2), (FW.z0 + FW.z1) / 2
   const so = new THREE.Mesh(new THREE.PlaneGeometry(46, 30), am); so.rotation.x = -Math.PI / 2; so.position.set(-193, 0.013, 200); so.receiveShadow = true; scene.add(so); }
 const inFwZone = (x, z) => (x >= FW.x - FW.W / 2 - 1 && x <= -180 && z >= FW.z0 - 12 && z <= FW.z1 + 12) || (x >= -217 && x <= -66 && z >= FW.z0 - 12 && z <= FW.z0 + 10) || (x >= -217 && x <= -168 && z >= 180 && z <= 216);
 // surface height under a thing at (x,z) that is currently at height y (ramp/deck vs. ground underneath)
-const surfaceY = (x, z, y = 0) => { if (inRect(SWAMP, x, z) && onSwampRoad(x, z)) return 0.45; const h = fw.heightAt(x, z), g = ic ? ic.heightAt(x, z, y) : 0; return Math.max(h > 0 && y + 1.6 >= h ? h : 0, g); };
+const surfaceY = (x, z, y = 0) => { if (inRect(SWAMP, x, z) && onSwampRoad(x, z)) return 0.45; const h = fw.heightAt(x, z), g = ic ? ic.heightAt(x, z, y) : 0, e = ex ? ex.heightAt(x, z, y) : 0; return Math.max(h > 0 && y + 1.6 >= h ? h : 0, g, e); };
+let ex = null;
 let ic = null;
 // ---------- Interstate 395 spur along the south edge (ground level, 4 lanes + median) ----------
 const IS = { z: 240, W: 26, x0: -216, x1: 196, cons: [0, 120] };
@@ -288,7 +290,16 @@ const npcLots = [];
 for (const c of CITIES) { const L = c.lines; for (let i = 0; i < L.length - 1; i++) for (let j = 0; j < L.length - 1; j++) npcLots.push({ cx: c.center.x + (L[i] + L[i + 1]) / 2, cz: c.center.z + (L[j] + L[j + 1]) / 2, h: (L[i + 1] - L[i] - 14) / 2 - 1.5 }); }
 { const L = [-160, -80, 0, 80, 160]; for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) npcLots.push({ cx: -450 + (L[i] + L[i + 1]) / 2, cz: (L[j] + L[j + 1]) / 2, h: 28.5 }); }
 // Mika's I-95 / SR-836 interchange: elevated cross highway over I-95 with four flyover ramps
-ic = buildInterchange(scene, { addCol });
+ic = combineRoads([
+  buildInterchange(scene, { addCol }),
+  buildInterchange(scene, { x: -150, z: 2500, name: 'SR-70', exit: 31, northTo: 'Vice Bay', southTo: 'Sunrise City', west: [], eastEnd: 0, addCol }),
+  buildInterchange(scene, { x: 100, z: -2550, hwy: 75, name: 'SR-41', exit: 48, northTo: 'Cypress Point', southTo: 'Vice Bay', west: [], eastEnd: 0, addCol }),
+  buildInterchange(scene, { x: -4700, z: 0, hwy: 275, name: 'SR-60', exit: 5, northTo: 'Pine Ridge', southTo: 'Lake Mirage', west: [], eastEnd: 0, addCol }),
+]);
+// New Bot: SR-112 Airport Expressway, a raised 4-lane toll road from I-295 west over the countryside to the airport
+ex = buildExpressway(scene, { name: 'SR-112 Airport Expressway', points: [[-716, 560], [-1300, 560], [-1970, 120], [-1970, -40]], H: 11, W: 18, up: 160, down: 160, R: 120, addCol,
+  onRoad: (x, z) => HWS.some(h => h.onRoad(x, z)), toll: { at: 420, cost: 2 },
+  signs: [{ at: 200, lines: ['SR-112 WEST', 'Airport'] }, { at: -260, lines: ['Airport', 'Next Exit'] }] });
 for (const d of [airport, town, swamp]) for (const q of (d.spawns?.pedestrians || [])) npcLots.push({ cx: q.x, cz: q.z, h: 2 + Math.random() * 2 });
 HWS.push(
   buildInterstate(scene, { number: 95, name: 'Sunrise City', points: [[-150, 2000], [-150, 3000], [100, 3600], [-150, 4100], [-150, 4373]], addCol, startMile: 30 }),
@@ -296,7 +307,7 @@ HWS.push(
   buildInterstate(scene, { number: 4, name: 'Lake Mirage', points: [[-700, 850], [-1600, 850], [-2400, 1250], [-3500, 1250], [-4000, 850], [-4373, 850]], addCol }),
   buildInterstate(scene, { number: 275, name: 'Pine Ridge', points: [[-4700, 523], [-4700, -500], [-4400, -1300], [-4700, -2000], [-4700, -2273]], addCol }),
 );
-const inHw = (x, z) => CITIES.some(c => c.inside(x, z)) || inRect(SWAMP, x, z) || inRect(DT, x, z) || LINKS.some(r => inRect(r, x, z)) || inRect(AIR, x, z) || inRect(TOWN, x, z) || HWS.some(h => h.nearest(x, z).dist < h.width / 2 + 2) || (ic && ic.inZone(x, z));
+const inHw = (x, z) => CITIES.some(c => c.inside(x, z)) || inRect(SWAMP, x, z) || inRect(DT, x, z) || LINKS.some(r => inRect(r, x, z)) || inRect(AIR, x, z) || inRect(TOWN, x, z) || HWS.some(h => h.nearest(x, z).dist < h.width / 2 + 2) || (ic && ic.inZone(x, z)) || (ex && ex.onDeck(x, z));
 const isLanes = [{ z: IS.z + 3.2, dir: 1 }, { z: IS.z + 9, dir: 1 }, { z: IS.z - 3.2, dir: -1 }, { z: IS.z - 9, dir: -1 }];
 // ---------- traffic lights at every grid crossing ----------
 const tl = new TrafficLights(scene);
@@ -368,7 +379,7 @@ function streetName(x, z) {
   for (const r of LINKS) if (inRect(r, x, z)) return r.name;
   if (inRect(AIR, x, z)) { const s = airport.streetAt(x, z); return s ? s + ', Vice Bay Intl' : 'Vice Bay International Airport'; }
   if (inRect(TOWN, x, z)) { const s = town.streetAt(x, z); return s ? s + ', Palmetto Springs' : 'Palmetto Springs'; }
-  { const pc = player.car || player, nm = ic ? ic.roadName(x, z) : null; if (nm) return nm; }
+  { const pc = player.car || player, nm = (ex && ex.nameAt(x, z)) || (ic ? ic.roadName(x, z) : null); if (nm) return nm; }
   if (fw.onDeck(x, z) && fw.heightAt(x, z) > 0) return 'Vice Bay Expressway (VB-1 / I-195)';
   if (inFwZone(x, z) && x < -183 && z < 196) return 'VB-1 Ramp';
   for (const h of HWS) if (h.onRoad(x, z)) return `Interstate ${h.number}`;
@@ -732,7 +743,9 @@ function moveCar(v, dt, ai) {
     if (ai) { v.reverseT = 0.9; v.turnDir = Math.random() < 0.5 ? 1 : -1; }
     return;
   }
-  v.y = surfaceY(v.x, v.z, v.y || 0); if (v.y > 0.5) { fw.clampToDeck(v); ic.clampToDeck(v); }
+  v.y = surfaceY(v.x, v.z, v.y || 0);
+  if (v === player.car && ex.tollPt) { const t = ex.tollPt, dd = Math.hypot(v.x - t.x, v.z - t.z); if (dd < 9 && Math.abs(v.y - t.h) < 2 && !ex.paid) { ex.paid = true; const c = Math.min(player.money, t.cost); player.money -= c; showMsg(c ? `🛣️ Toll -$${c}` : '🛣️ Toll skipped, no cash!', 2); } else if (dd > 30) ex.paid = false; }
+  if (v.y > 0.5) { fw.clampToDeck(v); ic.clampToDeck(v); ex.clamp(v); }
   const hit = collideCircle(v.x, v.z, v.kind === 'bike' ? 1.1 : 1.7, v.y || 0);
   if (hit) {
     v.x += hit.px; v.z += hit.pz;
@@ -939,7 +952,7 @@ function updateFoot(dt) {
   if (!allowedAt(player.x, player.z, true)) { player.x = pox; player.z = poz; }
   const landing = player.vy;
   // jump / gravity
-  if (player.y > 0.5) { fw.clampToDeck(player); ic.clampToDeck(player); if (fw.heightAt(player.x, player.z) > 0.5 && player.y > 0.5 && Math.abs(player.x - FW.x) > FW.W / 2 - 1) { player.x = clamp(player.x, FW.x - FW.W / 2 + 1, FW.x + FW.W / 2 - 1); } }
+  if (player.y > 0.5) { fw.clampToDeck(player); ic.clampToDeck(player); ex.clamp(player); if (fw.heightAt(player.x, player.z) > 0.5 && player.y > 0.5 && Math.abs(player.x - FW.x) > FW.W / 2 - 1) { player.x = clamp(player.x, FW.x - FW.W / 2 + 1, FW.x + FW.W / 2 - 1); } }
   const groundY = player.swim ? -1.1 : surfaceY(player.x, player.z, player.y);
   if (input.jump && player.y <= groundY + 0.01 && !player.swim) player.vy = 6.5;
   player.vy -= 18 * dt; player.y += player.vy * dt; if (player.y < groundY) { if (player.vy < -14 && !player.swim) hurt((-player.vy - 14) * 6, 'fall'); player.y = groundY; player.vy = 0; }
@@ -1184,6 +1197,7 @@ function drawMinimap() {
   mm.fillStyle = '#6b6b72'; mm.fillRect(X(FW.x - FW.W / 2), Z(FW.z0), FW.W * sc, (FW.z1 - FW.z0) * sc); mm.fillRect(X(-215), Z(FW.z0 - 11), 150 * sc, 20 * sc); mm.fillRect(X(-215), Z(185), 47 * sc, 30 * sc);
   mm.fillStyle = '#4a5a8a'; mm.fillRect(X(IS.x0), Z(IS.z - IS.W / 2), (IS.x1 - IS.x0 + 28) * sc, IS.W * sc); mm.fillRect(X(-217), Z(196), 25 * sc, (IS.z - 196) * sc); for (const c of IS.cons) mm.fillRect(X(c - RW / 2), Z(180), RW * sc, (IS.z - 180) * sc);
   mm.strokeStyle = '#4a5a8a'; mm.lineCap = 'round'; for (const h of HWS) { mm.lineWidth = h.width * sc; mm.beginPath(); h.segs.forEach((g, i) => { if (!i) mm.moveTo(X(g.a.x), Z(g.a.z)); mm.lineTo(X(g.b.x), Z(g.b.z)); }); mm.stroke(); }
+  if (ex) { mm.strokeStyle = '#c49a5b'; mm.lineWidth = Math.max(2, ex.width * sc); mm.beginPath(); ex.pts.forEach((q, k) => k % 4 ? 0 : (k ? mm.lineTo(X(q.x), Z(q.z)) : mm.moveTo(X(q.x), Z(q.z)))); mm.stroke(); }
   if (ic) { mm.strokeStyle = '#7b8cc4'; for (const P of ic.paths) { mm.lineWidth = Math.max(2, P.width * sc); mm.beginPath(); P.points.forEach(([qx, qz], k) => k ? mm.lineTo(X(qx), Z(qz)) : mm.moveTo(X(qx), Z(qz))); mm.stroke(); } }
   mm.fillStyle = '#8a8a90'; for (const rz of [-110, 110]) mm.fillRect(X(-1970 - 230), Z(-211 + rz - 15), 460 * sc, 30 * sc); mm.fillRect(X(-1970 - 130), Z(-211 - 35), 260 * sc, 70 * sc); mm.fillRect(X(-1840), Z(-51), 140 * sc, 20 * sc);
   for (const r of [...LINKS, ...downtown.streets, ...SWROADS]) mm.fillRect(X(r.minX), Z(r.minZ), (r.maxX - r.minX) * sc, (r.maxZ - r.minZ) * sc);
@@ -1463,5 +1477,5 @@ window.__mp = { net, remotes };
 refreshMissionMarkers(); applyQuality(); applyControls();
 gfx = setupGraphics(renderer, scene, camera, { quality: settings.quality === 'ultra' ? 'high' : settings.quality }); gfx.upgrade(scene); applyQuality();
 camera.position.set(player.x + 30, 40, player.z + 50); camera.lookAt(player.x, 0, player.z);
-window.__game = { state, player, vehicles, peds, settings, enterCar, exitCar, addWanted, MISSIONS, startMission, POI, HWS };
+window.__ex = ex; window.__game = { state, player, vehicles, peds, settings, enterCar, exitCar, addWanted, MISSIONS, startMission, POI, HWS };
 requestAnimationFrame(frame);
