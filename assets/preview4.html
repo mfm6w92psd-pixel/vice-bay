@@ -1,0 +1,9 @@
+<!doctype html><html><head><script type="importmap">{"imports":{"three":"../vendor/three.module.js"}}</script><style>body{margin:0}</style></head><body><script type="module">
+import * as THREE from 'three'; import * as M from './models.js'; import {buildFreeway} from './freeway.js';
+const r=new THREE.WebGLRenderer({antialias:true});r.setSize(innerWidth,innerHeight);r.shadowMap.enabled=true;document.body.appendChild(r.domElement);
+const s=new THREE.Scene();s.background=M.skyColor(0.5);s.add(new THREE.HemisphereLight(0xffffff,0x445566,1.2));const sun=new THREE.DirectionalLight(0xffe0c0,2);sun.position.set(40,60,20);sun.castShadow=true;Object.assign(sun.shadow.camera,{left:-120,right:120,top:120,bottom:-120});sun.shadow.mapSize.set(2048,2048);s.add(sun);
+const g=new THREE.Mesh(new THREE.PlaneGeometry(600,600),M.mat(0x9fd5a0));g.rotation.x=-Math.PI/2;g.receiveShadow=true;s.add(g);
+const fw=buildFreeway(s,{x:0,z0:-150,z1:150});
+for(const [lx,z] of [[fw.lanes[0].x,-20],[fw.lanes[2].x,10],[fw.lanes[3].x,-100],[fw.lanes[1].x,40]]){const c=M.makeCar();c.position.set(lx,fw.heightAt(lx,z),z);if(fw.lanes.find(l=>l.x===lx).dir>0)c.rotation.y=Math.PI;const y2=fw.heightAt(lx,z-2),y1=fw.heightAt(lx,z+2);c.rotation.x=Math.atan2(y2-y1,4)*(c.rotation.y?-1:1);s.add(c);}
+const cam=new THREE.PerspectiveCamera(50,innerWidth/innerHeight,0.1,900);cam.position.set(-55,30,-160);cam.lookAt(0,6,-40);r.render(s,cam);
+</script></body></html>

@@ -1,0 +1,20 @@
+<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
+<script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js"}}</script>
+<style>body{margin:0;overflow:hidden}</style></head><body><script type="module">
+import * as THREE from 'three';
+import * as M from './models.js';
+const r=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});r.setSize(innerWidth,innerHeight);r.shadowMap.enabled=true;document.body.appendChild(r.domElement);
+const s=new THREE.Scene();s.background=M.skyColor(0.75);
+const cam=new THREE.PerspectiveCamera(50,innerWidth/innerHeight,0.1,500);cam.position.set(22,16,26);cam.lookAt(0,2,0);
+s.add(new THREE.HemisphereLight(0xffffff,0x445566,1.2));const sun=new THREE.DirectionalLight(0xffe0c0,2);sun.position.set(30,40,10);sun.castShadow=true;sun.shadow.camera.left=-40;sun.shadow.camera.right=40;sun.shadow.camera.top=40;sun.shadow.camera.bottom=-40;s.add(sun);
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(200,200),M.mat(0x9fd5a0));ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;s.add(ground);
+for(let i=-2;i<=2;i++){const rd=M.makeRoad(20,true);rd.position.x=i*20;s.add(rd);}
+[[-20,-20,10,24],[0,-20,14,14],[20,-20,10,32]].forEach(([x,z,w,h])=>{const b=M.makeBuilding(w,h,12);b.position.set(x,0,z);s.add(b);});
+const c1=M.makeCar();c1.position.set(-6,0,3);c1.rotation.y=Math.PI/2;s.add(c1);
+const p=M.makePoliceCar();p.position.set(4,0,-3);p.rotation.y=-Math.PI/2;s.add(p);M.animateCar(p,0,0,false,0);
+for(let i=0;i<4;i++){const pp=M.makePerson({police:i==3});pp.position.set(-4+i*2.5,0,13);s.add(pp);M.animatePerson(pp,3,0.3);}
+for(const x of [-14,0,14]){const t=M.makePalm();t.position.set(x,0,11);s.add(t);}
+const l=M.makeStreetLight();l.position.set(8,0,11);s.add(l);
+const mk=M.makeMarker();mk.position.set(14,1.5,3);s.add(mk);
+r.render(s,cam);window.done=true;
+</script></body></html>

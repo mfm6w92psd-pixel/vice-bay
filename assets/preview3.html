@@ -1,0 +1,10 @@
+<!doctype html><html><head><script type="importmap">{"imports":{"three":"../vendor/three.module.js"}}</script><style>body{margin:0}</style></head><body><script type="module">
+import * as THREE from 'three'; import * as M from './models.js'; import {TrafficLights} from './trafficlights.js';
+const r=new THREE.WebGLRenderer({antialias:true});r.setSize(innerWidth,innerHeight);r.shadowMap.enabled=true;document.body.appendChild(r.domElement);
+const s=new THREE.Scene();s.background=M.skyColor(0.8);s.add(new THREE.HemisphereLight(0xaab4ff,0x223344,0.6));const sun=new THREE.DirectionalLight(0xffb080,0.8);sun.position.set(20,30,10);s.add(sun);
+const g=new THREE.Mesh(new THREE.PlaneGeometry(200,200),M.mat(0x9a9a9a));g.rotation.x=-Math.PI/2;s.add(g);
+for(let i=-3;i<=3;i++){const a=M.makeRoad(14,true);a.position.x=i*14;s.add(a);const b=M.makeRoad(14,false);b.position.set(0,0.012,i*14);if(i)s.add(b);}
+const tl=new TrafficLights(s);tl.addIntersection(0,0,14,0);tl.update(0.5);
+const c=M.makeCar();c.position.set(-14,0,2);c.rotation.y=-Math.PI/2;s.add(c);const c2=M.makeCar();c2.position.set(-2,0,16);s.add(c2);M.animateCar(c2,0,0,true);
+const cam=new THREE.PerspectiveCamera(50,innerWidth/innerHeight,0.1,500);cam.position.set(-20,12,22);cam.lookAt(0,2,0);r.render(s,cam);
+</script></body></html>

@@ -1,0 +1,17 @@
+<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
+<script type="importmap">{"imports":{"three":"../vendor/three.module.js"}}</script>
+<style>body{margin:0;overflow:hidden}</style></head><body><script type="module">
+import * as THREE from 'three';
+import * as M from './models.js'; import * as V from './vehicles.js'; import {buildPortCoral} from './neighborhoods.js';
+const r=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});r.setSize(innerWidth,innerHeight);r.shadowMap.enabled=true;document.body.appendChild(r.domElement);
+const s=new THREE.Scene();s.background=M.skyColor(0.5);
+const which=location.hash;
+const cam=new THREE.PerspectiveCamera(50,innerWidth/innerHeight,0.1,800);
+s.add(new THREE.HemisphereLight(0xffffff,0x445566,1.2));const sun=new THREE.DirectionalLight(0xffe0c0,2);sun.position.set(40,60,20);sun.castShadow=true;Object.assign(sun.shadow.camera,{left:-100,right:100,top:100,bottom:-100});sun.shadow.mapSize.set(2048,2048);s.add(sun);
+if(which==='#v'){const g=new THREE.Mesh(new THREE.PlaneGeometry(200,200),M.mat(0x9fd5a0));g.rotation.x=-Math.PI/2;g.receiveShadow=true;s.add(g);
+ const list=[V.makeSportsCar(),V.makeMotorcycle(),V.makeTruck(),V.makeBus(),V.makeBoat(),V.makeHelicopter(),V.makePoliceHelicopter()];
+ list.forEach((v,i)=>{v.position.set(-21+i*7,0,0);v.rotation.y=-0.6;s.add(v);if(v.userData.type==='heli'){v.position.y=0;V.animateHeli(v,0.1,1,0)}});
+ cam.position.set(0,14,26);cam.lookAt(0,1,0);
+}else{const port=buildPortCoral(s,{x:0,z:0});cam.position.set(-90,70,90);cam.lookAt(0,0,-5);}
+r.render(s,cam);
+</script></body></html>
