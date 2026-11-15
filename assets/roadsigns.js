@@ -62,8 +62,8 @@ function shieldSign(num, us, dir) {
       x.fillStyle = '#fff'; x.font = 'bold 13px sans-serif'; x.fillText('INTERSTATE', w / 2, 33); x.font = `bold ${String(num).length > 2 ? 38 : 50}px sans-serif`; x.fillText(String(num), w / 2, 102); }
   });
   const g = new THREE.Group();
-  const f = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 2.06), new THREE.MeshBasicMaterial({ map: t, transparent: true, alphaTest: 0.5 })); f.position.y = 2.6; g.add(f);
-  const p = new THREE.Mesh(new THREE.BoxGeometry(0.12, 2.6, 0.12), postMat); p.position.set(0, 1.3, -0.06); g.add(p);
+  const f = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 3.3), new THREE.MeshBasicMaterial({ map: t, transparent: true, alphaTest: 0.5 })); f.position.y = 3.4; g.add(f);
+  const p = new THREE.Mesh(new THREE.BoxGeometry(0.14, 3.4, 0.14), postMat); p.position.set(0, 1.7, -0.06); g.add(p);
   return g;
 }
 // yellow diamond curve warning with an arrow bending left or right
@@ -78,6 +78,19 @@ function curveSign(right) {
   const g = new THREE.Group();
   const f = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 1.7), new THREE.MeshBasicMaterial({ map: t, transparent: true, alphaTest: 0.5 })); f.position.y = 2.5; g.add(f);
   const p = new THREE.Mesh(new THREE.BoxGeometry(0.12, 2.5, 0.12), postMat); p.position.set(0, 1.25, -0.06); g.add(p);
+  return g;
+}
+
+// big green entrance guide sign: shield on the left, "WEST" + destination on the right
+function entranceSign(num, us, dir, dest) {
+  const t = tex(`e:${us ? 'U' : 'I'}${num}:${dir}:${dest}`, 512, 220, (x, w, h) => {
+    x.fillStyle = '#0b6b3a'; x.fillRect(0, 0, w, h); x.strokeStyle = '#fff'; x.lineWidth = 6; x.strokeRect(8, 8, w - 16, h - 16);
+    x.fillStyle = '#fff'; x.textAlign = 'left'; x.font = 'bold 44px sans-serif'; x.fillText(dir, 170, 82);
+    x.font = `bold ${dest.length > 12 ? 34 : 40}px sans-serif`; x.fillText(dest, 170, 140);
+    x.font = 'bold 30px sans-serif'; x.fillText('ENTRANCE  →', 170, 190);
+  });
+  const g = panel(t, 7, 3, 4.6);
+  const sh = shieldSign(num, us, dir).children[0].clone(); sh.geometry = new THREE.PlaneGeometry(1.9, 2.6); sh.position.set(-2.3, 4.85, 0.02); g.add(sh);
   return g;
 }
 const CARD = (dx, dz) => Math.abs(dx) > Math.abs(dz) ? (dx > 0 ? 'EAST' : 'WEST') : (dz < 0 ? 'NORTH' : 'SOUTH');
@@ -133,6 +146,11 @@ export function buildRoadSigns(scene, { highways, places = [], cityRadius = 450 
     const last = segs[segs.length - 1], first = segs[0], ce = near(end), cs = near(start);
     if (ce && last.len > 120) put(welcomeSign(ce.name), at(last, last.len - 70, -side), last.ang + Math.PI);
     if (cs && first.len > 120) put(welcomeSign(cs.name), at(first, 70, side), first.ang);
+    // entrance guide signs where traffic joins each end of the highway
+    if (h.number != null) {
+      if (first.len > 120 && endCity) put(entranceSign(h.number, h.us, CARD(first.dir.x, first.dir.z), endCity.name), at(first, 35, -side - 2), first.ang + Math.PI);
+      if (last.len > 120 && startCity) put(entranceSign(h.number, h.us, CARD(-last.dir.x, -last.dir.z), startCity.name), at(last, last.len - 35, side + 2), last.ang);
+    }
   }
   return { root, count };
 }
