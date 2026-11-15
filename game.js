@@ -1,4 +1,5 @@
 // Vice Bay — Stage 1 core gameplay (New Bot). Art/audio by Mika in ./assets.
+import { buildTeleport } from './assets/teleport.js';
 import { buildRoadSigns } from './assets/roadsigns.js';
 import * as THREE from 'three';
 import * as M from './assets/models.js';
@@ -394,6 +395,23 @@ for (const sh of SHOPS) { const m = M.makeMarker(0x00c2ff); m.position.set(sh.x,
 for (const pr of PROPERTIES) if (pr.x !== undefined) [pr.x, pr.z] = wp(pr.x, pr.z);
 resolveProperties(POI);
 for (const pr of PROPERTIES) { const m = M.makeMarker(pr.owned ? 0x3ddc84 : 0xffcf3c); m.position.set(pr.x, 1.5, pr.z); m.scale.set(1.6, 0.7, 1.6); scene.add(m); pr.mesh = m; pr._own = pr.owned; }
+// New Bot 1's teleport menu: every target is nudged to the nearest open ground so the car never lands inside a building
+function tpSafe(x, z) {
+  const free = (px, pz) => !inWater(px, pz) && !colliders.some(c => px > c.minX - 4 && px < c.maxX + 4 && pz > c.minZ - 4 && pz < c.maxZ + 4);
+  if (free(x, z)) return [x, z];
+  for (let r = 4; r <= 160; r += 4) for (let a = 0; a < 16; a++) { const px = x + Math.cos(a * Math.PI / 8) * r, pz = z + Math.sin(a * Math.PI / 8) * r; if (free(px, pz)) return [px, pz]; }
+  return [x, z];
+}
+const tp = buildTeleport({
+  places: [{ name: 'Vice Bay', x: 0, z: 0, icon: '🌴' }, { name: 'Airport', x: AIRC[0], z: AIRC[1], icon: '✈️' }, { name: 'Palmetto Springs', x: TOWNC[0], z: TOWNC[1], icon: '🏘️' },
+    ...CITIES.map(c => ({ name: c.name, x: c.center.x, z: c.center.z, icon: '🏙️' }))],
+  teleport: (x, z) => { const [sx, sz] = tpSafe(x, z), v = player.car;
+    if (v) { v.x = sx; v.z = sz; v.speed = 0; if (v.kind !== 'heli') v.y = 0; v.mesh.position.set(sx, v.y || 0, sz); }
+    player.x = sx; player.z = sz; if (!v) player.y = 0; Object.assign(input, { mx: 0, my: 0, shoot: false, sprint: false }); },
+  getOwned: () => PROPERTIES.filter(p => p.owned && p.x !== undefined).map(p => ({ name: p.name, x: p.x, z: p.z, icon: p.icon || '⌂' })),
+  getPos: () => ({ x: player.x, z: player.z }),
+  showMsg, buttonStyle: 'top:10px;left:212px;',
+});
 const poiMarkers = {};
 for (const [id, p] of Object.entries(POI)) {
   if (['beach', 'gas', 'dock'].includes(id)) continue;
@@ -1602,6 +1620,6 @@ window.__mp = { net, remotes };
 refreshMissionMarkers(); applyQuality(); applyControls();
 gfx = setupGraphics(renderer, scene, camera, { quality: settings.quality === 'ultra' ? 'high' : settings.quality }); gfx.upgrade(scene); applyQuality();
 camera.position.set(player.x + 30, 40, player.z + 50); camera.lookAt(player.x, 0, player.z);
-window.__ex = ex; window.__game = { colliders, inHw, scene, camera, renderer, sun, state, player, vehicles, peds, settings, enterCar, exitCar, addWanted, MISSIONS, startMission, POI, HWS };
+window.__ex = ex; window.__game = { colliders, inHw, scene, camera, renderer, sun, state, player, vehicles, peds, settings, enterCar, exitCar, addWanted, MISSIONS, startMission, POI, HWS, tp };
 requestAnimationFrame(frame);
 { const vt = document.getElementById('verTag'); if (vt) vt.textContent = 'v' + VERSION; }
