@@ -338,6 +338,9 @@ ic = combineRoads([
   buildInterchange(scene, { x: wp(-150, 2500)[0], z: wp(-150, 2500)[1], name: 'SR-70', exit: 31, northTo: 'Vice Bay', southTo: 'Sunrise City', west: [], eastEnd: 0, addCol }),
   buildInterchange(scene, { x: wp(100, -2550)[0], z: wp(100, -2550)[1], hwy: 75, name: 'SR-41', exit: 48, northTo: 'Cypress Point', southTo: 'Vice Bay', west: [], eastEnd: 0, addCol }),
   buildInterchange(scene, { x: wp(-4700, 0)[0], z: wp(-4700, 0)[1], hwy: 275, name: 'SR-60', exit: 5, northTo: 'Pine Ridge', southTo: 'Lake Mirage', west: [], eastEnd: 0, addCol }),
+  buildInterchange(scene, { x: wp(-7000, -1000)[0], z: wp(-7000, -1000)[1], hwy: 2, name: 'SR-50', exit: 12, northTo: 'Pine Ridge', southTo: 'Palm Harbor', west: [], eastEnd: 0, addCol }),
+  buildInterchange(scene, { x: wp(-4700, 1900)[0], z: wp(-4700, 1900)[1], hwy: 26, name: 'SR-84', exit: 25, northTo: 'Lake Mirage', southTo: 'Sunrise City', west: [], eastEnd: 0, addCol }),
+  buildInterchange(scene, { x: wp(-7000, 2100)[0], z: wp(-7000, 2100)[1], hwy: 66, name: 'SR-92', exit: 38, northTo: 'Palm Harbor', southTo: 'Sunrise City', west: [], eastEnd: 0, addCol }),
 ]);
 // New Bot: SR-112 Airport Expressway, a raised 4-lane toll road from I-295 west over the countryside to the airport
 ex = buildExpressway(scene, { name: 'SR-112 Airport Expressway', points: [[-716, 560], [-1300, 560], [-1970, 120], [-1970, -40]].map(wpt), H: 11, W: 18, up: 160, down: 160, R: 120, addCol,
@@ -370,7 +373,7 @@ HWS.push(
   buildInterstate(scene, { number: 32, name: 'Coral Springs South', points: [[-3300, -1077], [-3450, -1340], [-3600, -1600]], addCol, startMile: 500 }),
 );
 // keep farm barns out from under flyovers (one used to block the SR-70 underpass on I-95)
-for (const [cx, cz, r] of [[-150, 1450, 140], [...wp(-150, 2500), 300], [...wp(100, -2550), 300], [...wp(-4700, 0), 300]]) {
+for (const [cx, cz, r] of [[-150, 1450, 140], [...wp(-150, 2500), 300], [...wp(100, -2550), 300], [...wp(-4700, 0), 300], [...wp(-7000, -1000), 300], [...wp(-4700, 1900), 300], [...wp(-7000, 2100), 300]]) {
   for (const h of HWS) for (const c of [...h.root.children]) if (c.isMesh && c.geometry?.type === 'BoxGeometry' && c.material?.color?.getHex() === 0xa4161a && Math.hypot(c.position.x - cx, c.position.z - cz) < r) h.root.remove(c);
   for (let k = colliders.length - 1; k >= 0; k--) { const c = colliders[k]; if (Math.abs(c.maxX - c.minX - 12) < 0.01 && Math.abs(c.maxZ - c.minZ - 12) < 0.01 && Math.hypot((c.minX + c.maxX) / 2 - cx, (c.minZ + c.maxZ) / 2 - cz) < r) colliders.splice(k, 1); }
 }
