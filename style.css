@@ -5,7 +5,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#000;font-family:-appl
 #hud{position:fixed;inset:0;pointer-events:none}
 #hud button{pointer-events:auto}
 #topLeft{position:absolute;top:max(10px,env(safe-area-inset-top));left:max(10px,env(safe-area-inset-left))}
-#minimap{width:140px;height:140px;border-radius:50%;border:3px solid rgba(255,255,255,.8);background:#223;box-shadow:0 2px 10px #0008}
+#minimap{pointer-events:auto;cursor:pointer;width:190px;height:190px;border-radius:50%;border:3px solid rgba(255,255,255,.8);background:#223;box-shadow:0 2px 10px #0008}
 .bar{width:140px;height:7px;background:#0007;border-radius:4px;margin-top:5px;overflow:hidden}
 .fill{height:100%;width:100%;transition:width .2s}
 .hp{background:linear-gradient(90deg,#2ee59d,#7dffb8)}.armor{background:linear-gradient(90deg,#19c3ff,#8ae2ff)}
@@ -61,3 +61,6 @@ html,body{margin:0;height:100%;overflow:hidden;background:#000;font-family:-appl
 #street{margin-top:6px;font-size:15px;font-weight:700;font-style:italic;color:#fff;text-shadow:0 2px 3px #000,0 0 2px #000;max-width:220px}
 #street.fade{animation:streetIn 4s forwards}
 @keyframes streetIn{0%{opacity:0;transform:translateX(-10px)}10%{opacity:1;transform:none}75%{opacity:1}100%{opacity:.55}}
+
+#minimap.big{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(92vw,88vh);height:min(92vw,88vh);border-radius:14px;z-index:50}
+#mmhint{position:fixed;left:50%;bottom:4vh;transform:translateX(-50%);color:#fff;font:bold 14px Arial;text-shadow:0 1px 3px #000;z-index:51;display:none;pointer-events:none}

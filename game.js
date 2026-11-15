@@ -961,7 +961,10 @@ function updateEnv(dt) {
 }
 
 // ---------- minimap ----------
-const mm = $('minimap').getContext('2d'), MMS = 280, MMR = 140; // canvas px, world range radius in units
+const mmEl = $('minimap'), mm = mmEl.getContext('2d'); let MMS = 280, MMR = 170, mmBig = false; // canvas px, world range radius in units
+function toggleBigMap(e) { if (e) { e.preventDefault(); e.stopPropagation(); } mmBig = !mmBig; mmEl.classList.toggle('big', mmBig); MMS = mmBig ? 720 : 280; MMR = mmBig ? 700 : 170; mmEl.width = mmEl.height = MMS; $('mmhint').style.display = mmBig ? 'block' : 'none'; }
+mmEl.addEventListener('touchstart', toggleBigMap, { passive: false }); mmEl.addEventListener('mousedown', toggleBigMap);
+addEventListener('keydown', e => { if (e.code === 'KeyM') toggleBigMap(); });
 function route(fx, fz, tx, tz) { // BFS on road grid
   const near = (x, z) => [clamp(Math.round((x + HALF) / B), 0, N), clamp(Math.round((z + HALF) / B), 0, N)];
   const [si, sj] = near(fx, fz), [ti, tj] = near(tx, tz);
@@ -984,7 +987,11 @@ function drawMinimap() {
   mm.fillStyle = '#999'; for (const l of lots) mm.fillRect(X(l.cx - LOT / 2), Z(l.cz - LOT / 2), LOT * sc, LOT * sc);
   mm.fillStyle = '#5fae5a'; for (const l of lots) if (l.park) mm.fillRect(X(l.cx - LOT / 2 + 3), Z(l.cz - LOT / 2 + 3), (LOT - 6) * sc, (LOT - 6) * sc);
   mm.fillStyle = '#d8d8d8'; for (const c of colliders) mm.fillRect(X(c.minX), Z(c.minZ), (c.maxX - c.minX) * sc, (c.maxZ - c.minZ) * sc);
-  const dot = (x, z, col, r = 5, txt) => { mm.fillStyle = col; mm.beginPath(); mm.arc(clamp(X(x), 8, MMS - 8), clamp(Z(z), 8, MMS - 8), r, 0, 7); mm.fill(); if (txt) { mm.fillStyle = '#fff'; mm.font = 'bold 11px Arial'; mm.textAlign = 'center'; mm.fillText(txt, clamp(X(x), 8, MMS - 8), clamp(Z(z), 8, MMS - 8) + 4); } };
+  { const lab = (x, z, t) => { const lx = X(x), lz = Z(z); if (lx < 10 || lz < 10 || lx > MMS - 10 || lz > MMS - 10) return; const f = mmBig ? 15 : 10; mm.font = `bold ${f}px Arial`; mm.textAlign = 'center'; const w = mm.measureText(t).width + 8; mm.fillStyle = '#1d4fb8'; mm.fillRect(lx - w / 2, lz - f * 0.8, w, f * 1.4); mm.strokeStyle = '#fff'; mm.lineWidth = 1.5; mm.strokeRect(lx - w / 2, lz - f * 0.8, w, f * 1.4); mm.fillStyle = '#fff'; mm.fillText(t, lx, lz + f * 0.35); };
+    for (const h of HWS) h.segs.forEach(g => { const n = Math.max(1, Math.round(g.len / (mmBig ? 400 : 160))); for (let k = 0; k < n; k++) { const t = (k + 0.5) / n; lab(g.a.x + (g.b.x - g.a.x) * t, g.a.z + (g.b.z - g.a.z) * t, 'I-' + h.number); } });
+    lab((IS.x0 + IS.x1) / 2 - 40, IS.z, 'I-395'); lab(FW.x, -60, 'VB-1');
+    if (mmBig) { mm.font = 'bold 18px Arial'; mm.fillStyle = '#fff'; mm.textAlign = 'center'; mm.fillText('VICE BAY', X(0), Z(0)); mm.fillText('PORT CORAL', X(20), Z(-300)); } }
+  const dot = (x, z, col, r = 5, txt) => { if (mmBig) r *= 1.3; mm.fillStyle = col; mm.beginPath(); mm.arc(clamp(X(x), 8, MMS - 8), clamp(Z(z), 8, MMS - 8), r, 0, 7); mm.fill(); if (txt) { mm.fillStyle = '#fff'; mm.font = 'bold 11px Arial'; mm.textAlign = 'center'; mm.fillText(txt, clamp(X(x), 8, MMS - 8), clamp(Z(z), 8, MMS - 8) + 4); } };
   const tgt = state.mission?.target;
   if (tgt) { const r = route(px, pz, tgt.x, tgt.z); if (tgt.z < -EDGE || pz < -EDGE) { r.length = 0; if (pz < -EDGE && tgt.z > -EDGE) { r.push([px, pz], [0, pz], [0, -180], ...route(0, -180, tgt.x, tgt.z)); } else if (tgt.z < -EDGE && pz > -EDGE) { r.push(...route(px, pz, 0, -180), [0, -180], [0, tgt.z], [tgt.x, tgt.z]); } else r.push([px, pz], [0, pz], [0, tgt.z], [tgt.x, tgt.z]); } mm.strokeStyle = '#ff5e7e'; mm.lineWidth = 5; mm.beginPath(); r.forEach(([x, z], i) => i ? mm.lineTo(X(x), Z(z)) : mm.moveTo(X(x), Z(z))); mm.stroke(); }
   dot(POI.spray.x, POI.spray.z, '#00a86b', 8, '$'); dot(POI.hospital.x, POI.hospital.z, '#2b6cff', 8, 'H'); dot(POI.safe.x, POI.safe.z, '#8a5cff', 8, 'S'); dot(POI.police.x, POI.police.z, '#c0392b', 8, 'P'); dot(POI.garage.x, POI.garage.z, '#00a86b', 7, 'C'); dot(POI.diner.x, POI.diner.z, '#ff9f1c', 7, 'D'); for (const [x, z] of HELIPADS) dot(x, z, '#333a44', 6, 'H');
@@ -994,7 +1001,7 @@ function drawMinimap() {
   if (tgt) dot(tgt.x, tgt.z, '#ff5e7e', 7);
   // player arrow
   const h = player.car ? player.car.heading : player.heading;
-  mm.save(); mm.translate(MMS / 2, MMS / 2); mm.rotate(-h); mm.fillStyle = '#fff'; mm.strokeStyle = '#000'; mm.lineWidth = 2;
+  mm.save(); mm.translate(MMS / 2, MMS / 2); mm.rotate(-h); if (mmBig) mm.scale(1.5, 1.5); mm.fillStyle = '#fff'; mm.strokeStyle = '#000'; mm.lineWidth = 2;
   mm.beginPath(); mm.moveTo(0, -11); mm.lineTo(8, 9); mm.lineTo(0, 4); mm.lineTo(-8, 9); mm.closePath(); mm.fill(); mm.stroke(); mm.restore();
 }
 

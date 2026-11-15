@@ -1,0 +1,8 @@
+<!doctype html><html><head><script type="importmap">{"imports":{"three":"../vendor/three.module.js"}}</script><style>body{margin:0}</style></head><body><script type="module">
+import * as THREE from 'three'; import * as M from './models.js'; import {buildAirport,buildSmallTown} from './districts.js';
+const r=new THREE.WebGLRenderer({antialias:true});r.setSize(innerWidth,innerHeight);r.shadowMap.enabled=true;document.body.appendChild(r.domElement);
+const s=new THREE.Scene();s.background=M.skyColor(0.5);s.add(new THREE.HemisphereLight(0xffffff,0x445566,1.2));const sun=new THREE.DirectionalLight(0xffe0c0,2);sun.position.set(60,90,30);sun.castShadow=true;Object.assign(sun.shadow.camera,{left:-300,right:300,top:300,bottom:-300,far:600});sun.shadow.mapSize.set(2048,2048);s.add(sun);sun.target.position.set(0,0,0);s.add(sun.target);
+const cam=new THREE.PerspectiveCamera(50,innerWidth/innerHeight,0.1,3000);
+if(location.hash==='#t'){buildSmallTown(s,{x:0,z:0});cam.position.set(-150,110,-190);cam.lookAt(0,0,0);}else{buildAirport(s,{x:0,z:0});cam.position.set(260,170,280);cam.lookAt(0,0,0);}
+let f=0;(function loop(){r.render(s,cam);if(++f<30)requestAnimationFrame(loop);})();
+</script></body></html>
