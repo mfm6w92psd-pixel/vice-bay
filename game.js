@@ -340,7 +340,7 @@ ic = combineRoads([
   buildInterchange(scene, { x: wp(-4700, 0)[0], z: wp(-4700, 0)[1], hwy: 275, name: 'SR-60', exit: 5, northTo: 'Pine Ridge', southTo: 'Lake Mirage', west: [], eastEnd: 0, addCol }),
   buildInterchange(scene, { x: wp(-7000, -1000)[0], z: wp(-7000, -1000)[1], hwy: 2, name: 'SR-50', exit: 12, northTo: 'Pine Ridge', southTo: 'Palm Harbor', west: [], eastEnd: 0, addCol }),
   buildInterchange(scene, { x: wp(-4700, 1900)[0], z: wp(-4700, 1900)[1], hwy: 26, name: 'SR-84', exit: 25, northTo: 'Lake Mirage', southTo: 'Sunrise City', west: [], eastEnd: 0, addCol }),
-  buildInterchange(scene, { x: wp(-7000, 2100)[0], z: wp(-7000, 2100)[1], hwy: 66, name: 'SR-92', exit: 38, northTo: 'Palm Harbor', southTo: 'Sunrise City', west: [], eastEnd: 0, addCol }),
+  buildInterchange(scene, { x: wp(-7000, 2100)[0], z: wp(-7000, 2100)[1], hwy: 66, name: 'SR-92', exit: 38, northTo: 'Palm Harbor', southTo: 'Sunrise City', west: [], eastEnd: 0, us: true, addCol }),
 ]);
 // New Bot: SR-112 Airport Expressway, a raised 4-lane toll road from I-295 west over the countryside to the airport
 ex = buildExpressway(scene, { name: 'SR-112 Airport Expressway', points: [[-716, 560], [-1300, 560], [-1970, 120], [-1970, -40]].map(wpt), H: 11, W: 18, up: 160, down: 160, R: 120, addCol,

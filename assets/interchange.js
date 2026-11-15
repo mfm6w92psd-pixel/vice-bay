@@ -125,7 +125,8 @@ function roadSystem(root, ribbons, addCol) {
   return { heightAt, clampToDeck, inZone, roadName, lanes, paths, surfaces };
 }
 
-export function buildInterchange(scene, { x: CX = -150, z: CZ = 1450, H = 10, addCol = () => {}, west = [[-650, 1450], [-700, 880]], eastEnd = 300, name = 'SR-836', hwy = 95, northTo = 'Port Coral', southTo = 'Sunrise City', exit = 12 } = {}) {
+export function buildInterchange(scene, { x: CX = -150, z: CZ = 1450, H = 10, addCol = () => {}, west = [[-650, 1450], [-700, 880]], eastEnd = 300, name = 'SR-836', hwy = 95, northTo = 'Port Coral', southTo = 'Sunrise City', exit = 12, us = false } = {}) {
+  const HL = us ? `US-${hwy}` : `I-${hwy}`;
   const root = new THREE.Group(); scene.add(root);
   const ribbons = [];
   const MW = 24, RW = 10, FLAT = 160, RISE = 170;     // mainline width, ramp width, half flat length, ramp-up length
@@ -137,7 +138,7 @@ export function buildInterchange(scene, { x: CX = -150, z: CZ = 1450, H = 10, ad
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
     const S = new THREE.Vector3(CX + sx * 21, 0, CZ + sz * 210), Q = new THREE.Vector3(CX + sx * 21, 0, CZ + sz * 17), E = new THREE.Vector3(CX + sx * 135, 0, CZ + sz * 17);
     const fn = t => { const u = 1 - t, p = S.clone().multiplyScalar(u * u).addScaledVector(Q, 2 * u * t).addScaledVector(E, t * t); p.y = H * smooth(t * 1.15); return p; };
-    ribbons.push({ name: `I-${hwy} / ${name} Ramp`, kind: 'ramp', width: RW, pts: samplePath(fn, pathLen(fn)) });
+    ribbons.push({ name: `${HL} / ${name} Ramp`, kind: 'ramp', width: RW, pts: samplePath(fn, pathLen(fn)) });
   }
   // ground continuations (west to the I-295 / I-4 junction, short east spur to an overlook)
   const wpts = [[x0, CZ], ...west];
@@ -161,8 +162,8 @@ export function buildInterchange(scene, { x: CX = -150, z: CZ = 1450, H = 10, ad
     const s1 = greenSign(a, 9, 2.8); s1.position.set(-span / 4, 6.1, 0.3); g.add(s1);
     const s2 = greenSign(b, 9, 2.8); s2.position.set(span / 4, 6.1, 0.3); g.add(s2);
   };
-  gantry(CX - FLAT + 20, CZ, H, -Math.PI / 2, MW, [`I-${hwy} NORTH`, northTo], [`I-${hwy} SOUTH`, southTo]);
-  gantry(CX + FLAT - 20, CZ, H, Math.PI / 2, MW, [`I-${hwy} SOUTH`, southTo], [`I-${hwy} NORTH`, northTo]);
+  gantry(CX - FLAT + 20, CZ, H, -Math.PI / 2, MW, [`${HL} NORTH`, northTo], [`${HL} SOUTH`, southTo]);
+  gantry(CX + FLAT - 20, CZ, H, Math.PI / 2, MW, [`${HL} SOUTH`, southTo], [`${HL} NORTH`, northTo]);
   gantry(CX, CZ - 300, 0, 0, 32, [`EXIT ${exit}`, `${name} WEST`], [`EXIT ${exit}`, `${name} EAST`]);
   gantry(CX, CZ + 300, 0, Math.PI, 32, [`EXIT ${exit}`, `${name} EAST`], [`EXIT ${exit}`, `${name} WEST`]);
   { const sh = makeShield(hwy, 3); sh.position.set(CX + 1, H + 2.6, CZ - MW / 2 - 1.6); sh.rotation.y = Math.PI; root.add(sh); const sh2 = makeShield(hwy, 3); sh2.position.set(CX - 1, H + 2.6, CZ + MW / 2 + 1.6); root.add(sh2); }
