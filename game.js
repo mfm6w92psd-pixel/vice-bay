@@ -9,6 +9,7 @@ import { buildFreeway } from './assets/freeway.js';
 import { buildInterstate } from './assets/interstates.js';
 import { buildAirport, buildSmallTown, makeJet } from './assets/districts.js';
 import { buildSwamp, buildDowntown, makeAirboat } from './assets/regions.js';
+import { buildCity } from './assets/cities.js';
 
 const $ = id => document.getElementById(id);
 const audio = new GameAudio();
@@ -62,13 +63,13 @@ const SHORE = 222, CAR_MAX_X = 224, FOOT_MAX_X = 320, EDGE = HALF + 16;
 const colliders = [];
 const addCol = (x, z, w, d, h = 12) => colliders.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2, h });
 
-const ground = new THREE.Mesh(new THREE.PlaneGeometry(5200, 5200), M.mat(0x7fbf7a));
-ground.position.y = -0.02; ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(12000, 12000), M.mat(0x7fbf7a));
+ground.position.set(-2000, -0.02, 0); ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
 // beach + ocean
-const sand = new THREE.Mesh(new THREE.PlaneGeometry(SHORE - HALF + 10, 3750), M.mat(0xf2dca0));
-sand.rotation.x = -Math.PI / 2; sand.position.set((HALF + SHORE) / 2 + 2, 0.015, 225); sand.receiveShadow = true; scene.add(sand);
-const water = new THREE.Mesh(new THREE.PlaneGeometry(600, 3750), new THREE.MeshStandardMaterial({ color: 0x1fa3c9, roughness: 0.15, metalness: 0.3, transparent: true, opacity: 0.9 }));
-water.rotation.x = -Math.PI / 2; water.position.set(SHORE + 300, 0.05, 225); scene.add(water);
+const sand = new THREE.Mesh(new THREE.PlaneGeometry(SHORE - HALF + 10, 7250), M.mat(0xf2dca0));
+sand.rotation.x = -Math.PI / 2; sand.position.set((HALF + SHORE) / 2 + 2, 0.015, 1975); sand.receiveShadow = true; scene.add(sand);
+const water = new THREE.Mesh(new THREE.PlaneGeometry(600, 7250), new THREE.MeshStandardMaterial({ color: 0x1fa3c9, roughness: 0.15, metalness: 0.3, transparent: true, opacity: 0.9 }));
+water.rotation.x = -Math.PI / 2; water.position.set(SHORE + 300, 0.05, 1975); scene.add(water);
 
 function roadTexture(alongU) {
   const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d');
@@ -148,7 +149,7 @@ port.water.position.y = 0.03;
 for (const z of [-197, -213]) { const r = M.makeRoad(20, false); r.position.set(0, 0.012, z); scene.add(r); }
 const PORT = { minX: -72, maxX: 110, minZ: -385, maxZ: -180 };
 const inPort = (x, z) => x >= PORT.minX && x <= PORT.maxX && z >= PORT.minZ && z <= PORT.maxZ;
-const inWater = (x, z) => (x > SHORE + 2 && z > -1650) || inSwampWater(x, z) || (x >= port.waterRect.minX + 5 && x <= port.waterRect.maxX && z >= port.waterRect.minZ && z <= port.waterRect.maxZ);
+const inWater = (x, z) => (x > SHORE + 2 && z > -1650 && z < 5600) || inSwampWater(x, z) || (x >= port.waterRect.minX + 5 && x <= port.waterRect.maxX && z >= port.waterRect.minZ && z <= port.waterRect.maxZ);
 const allowedAt = (x, z, foot) => inFwZone(x, z) || inIsZone(x, z) || inHw(x, z) || (x >= -EDGE - (foot ? 30 : 0) && x <= (foot ? FOOT_MAX_X : FOOT_MAX_X) && z >= -EDGE - (foot ? 30 : 0) && z <= EDGE + (foot ? 30 : 0)) || inPort(x, z);
 POI.garage = { x: port.pois.garage.x, z: port.pois.garage.z, label: 'PORT CORAL CUSTOMS' };
 POI.diner = { x: port.pois.diner.x, z: port.pois.diner.z, label: 'CORAL DINER' };
@@ -246,7 +247,20 @@ for (const r of LINKS) {
   const w = r.maxX - r.minX, d = r.maxZ - r.minZ, along = w > d, t = roadTexture(along); t.repeat.set(along ? w / 20 : 1, along ? 1 : d / 20);
   const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshStandardMaterial({ map: t, roughness: 0.9 })); m.rotation.x = -Math.PI / 2; m.position.set((r.minX + r.maxX) / 2, 0.025, (r.minZ + r.maxZ) / 2); m.receiveShadow = true; scene.add(m);
 }
-const inHw = (x, z) => inRect(SWAMP, x, z) || inRect(DT, x, z) || LINKS.some(r => inRect(r, x, z)) || inRect(AIR, x, z) || inRect(TOWN, x, z) || HWS.some(h => h.nearest(x, z).dist < h.width / 2 + 2);
+// 5x world: four satellite cities linked by interstate extensions
+const CITIES = [
+  buildCity(scene, { name: 'Sunrise City', x: -150, z: 4700, seed: 3, addCol }),
+  buildCity(scene, { name: 'Cypress Point', x: 100, z: -4700, seed: 7, addCol }),
+  buildCity(scene, { name: 'Lake Mirage', x: -4700, z: 850, seed: 11, addCol }),
+  buildCity(scene, { name: 'Pine Ridge', x: -4700, z: -2600, seed: 19, addCol }),
+];
+HWS.push(
+  buildInterstate(scene, { number: 95, name: 'Sunrise City', points: [[-150, 2000], [-150, 3000], [100, 3600], [-150, 4100], [-150, 4373]], addCol, startMile: 30 }),
+  buildInterstate(scene, { number: 75, name: 'Cypress Point', points: [[100, -2100], [100, -3000], [-200, -3600], [100, -4100], [100, -4373]], addCol, startMile: 45 }),
+  buildInterstate(scene, { number: 4, name: 'Lake Mirage', points: [[-700, 850], [-1600, 850], [-2400, 1250], [-3500, 1250], [-4000, 850], [-4373, 850]], addCol }),
+  buildInterstate(scene, { number: 275, name: 'Pine Ridge', points: [[-4700, 523], [-4700, -500], [-4400, -1300], [-4700, -2000], [-4700, -2273]], addCol }),
+);
+const inHw = (x, z) => CITIES.some(c => c.inside(x, z)) || inRect(SWAMP, x, z) || inRect(DT, x, z) || LINKS.some(r => inRect(r, x, z)) || inRect(AIR, x, z) || inRect(TOWN, x, z) || HWS.some(h => h.nearest(x, z).dist < h.width / 2 + 2);
 const isLanes = [{ z: IS.z + 3.2, dir: 1 }, { z: IS.z + 9, dir: 1 }, { z: IS.z - 3.2, dir: -1 }, { z: IS.z - 9, dir: -1 }];
 // ---------- traffic lights at every grid crossing ----------
 const tl = new TrafficLights(scene);
@@ -258,8 +272,15 @@ for (const [id, p] of Object.entries(POI)) {
   m.position.set(p.x, 1.5, p.z); m.scale.set(1.4, 0.6, 1.4); scene.add(m); poiMarkers[id] = m;
 }
 
+const COLG = { n: -1, map: new Map(), S: 100 };
+function colCellsNear(x, z, r) { const S = COLG.S; if (Math.floor((x - r) / S) === Math.floor((x + r) / S) && Math.floor((z - r) / S) === Math.floor((z + r) / S)) return colCell(x, z); const set = new Set(); for (const [dx, dz] of [[-r, -r], [r, -r], [-r, r], [r, r]]) for (const c of colCell(x + dx, z + dz)) set.add(c); return set; }
+function colCell(x, z) {
+  if (COLG.n !== colliders.length) { COLG.map.clear(); COLG.n = colliders.length; const S = COLG.S;
+    for (const c of colliders) for (let i = Math.floor(c.minX / S); i <= Math.floor(c.maxX / S); i++) for (let j = Math.floor(c.minZ / S); j <= Math.floor(c.maxZ / S); j++) { const k = i * 100000 + j; let a = COLG.map.get(k); if (!a) COLG.map.set(k, a = []); a.push(c); } }
+  return COLG.map.get(Math.floor(x / COLG.S) * 100000 + Math.floor(z / COLG.S)) || [];
+}
 function collideCircle(x, z, r, y = 0) {
-  for (const c of colliders) {
+  for (const c of (r < 20 ? colCellsNear(x, z, r) : colliders)) {
     if (y > c.h) continue;
     const nx = clamp(x, c.minX, c.maxX), nz = clamp(z, c.minZ, c.maxZ), dx = x - nx, dz = z - nz;
     if (dx * dx + dz * dz < r * r) {
@@ -305,6 +326,7 @@ function streetSign(text) {
   }));
 }
 function streetName(x, z) {
+  for (const c of CITIES) if (c.inside(x, z)) { const s = c.streetAt(x, z); return s ? s + ', ' + c.name : c.name; }
   if (inRect(DT, x, z)) { const s = downtown.streetAt(x, z); return s ? s + ', Vice Bay Heights' : 'Vice Bay Heights'; }
   if (inRect(SWAMP, x, z)) { const s = swamp.streetAt(x, z); return s ? s + ', Gator Glades' : 'Gator Glades'; }
   for (const r of LINKS) if (inRect(r, x, z)) return r.name;
@@ -345,6 +367,7 @@ const portMakers = [() => V.makeTruck(), () => V.makeTruck(0xd62828, 0x264653), 
 const FIXED = [];
 port.vehicles.forEach((m, i) => { const wp = new THREE.Vector3(); m.getWorldPosition(wp); port.root.remove(m); FIXED.push({ x: wp.x, z: wp.z, h: m.rotation.y, make: portMakers[i] || (() => M.makeCar()), first: m, hauler: i === 1 }); });
 const distMake = m => { const t = m.userData?.type; return t === 'jet' ? () => makeJet(0x8a5cff) : t === 'heli' ? () => V.makeHelicopter(0xff7a1a) : t === 'bus' ? () => V.makeBus(0x003f87) : t === 'truck' ? () => V.makeTruck(0x2d6a4f, 0xff9f1c) : t === 'bike' ? () => V.makeMotorcycle(0x111111) : t === 'sports' ? () => V.makeSportsCar(0x19c3ff) : () => M.makeCar(); };
+for (const c of CITIES) for (const [x, z, h] of c.parking) FIXED.push({ x, z, h, make: () => M.makeCar() });
 swamp.boats.forEach(m => { const wp = new THREE.Vector3(); m.getWorldPosition(wp); swamp.root.remove(m); m.userData.type = 'boat'; FIXED.push({ x: wp.x, z: wp.z, h: m.rotation.y, make: () => { const b = makeAirboat(); b.userData.type = 'boat'; return b; }, first: m }); });
 for (const m of downtown.vehicles) { const wp = new THREE.Vector3(); m.getWorldPosition(wp); downtown.root.remove(m); const t = m.userData?.type; if (t === 'heli') wp.set(downtown.pois.plaza.x + 14, 0, downtown.pois.plaza.z + 14); FIXED.push({ x: wp.x, z: wp.z, h: m.rotation.y, make: t === 'heli' ? () => V.makeHelicopter() : t === 'bus' ? () => V.makeBus() : t === 'sports' ? () => V.makeSportsCar() : () => M.makeCar(), first: m }); }
 for (const d of [swamp, airport, town]) d.vehicles.filter(m => !swamp.boats.includes(m)).forEach(m => { const wp = new THREE.Vector3(); m.getWorldPosition(wp); d.root.remove(m); FIXED.push({ x: wp.x, z: wp.z, h: m.rotation.y, make: distMake(m), first: m }); });
@@ -1013,7 +1036,7 @@ function toggleBigMap(e) {
   if (mmBig) { const [x, z] = playerXZ(); mmView.cx = x; mmView.cz = z; }
   $('mmhint').style.display = $('mmctl').style.display = mmBig ? 'flex' : 'none';
 }
-function mmZoom(f) { mmView.R = clamp(mmView.R * f, 150, 2600); MMR = mmView.R; }
+function mmZoom(f) { mmView.R = clamp(mmView.R * f, 150, 6000); MMR = mmView.R; }
 function mmToWorld(cxp, cyp) { const r = mmEl.getBoundingClientRect(), u = (cxp - r.left) / r.width * MMS, v = (cyp - r.top) / r.height * MMS, sc = MMS / 2 / MMR; return [mmView.cx + (u - MMS / 2) / sc, mmView.cz + (v - MMS / 2) / sc]; }
 function setWaypoint(x, z) {
   const w = state.waypoint; if (w && Math.hypot(w.x - x, w.z - z) < MMR * 0.06) { state.waypoint = null; showMsg('Waypoint cleared', 1.5); return; }
@@ -1030,7 +1053,7 @@ function setWaypoint(x, z) {
   });
   mmEl.addEventListener('pointermove', e => {
     if (!mmBig || !ptrs.has(e.pointerId)) return; e.preventDefault(); ptrs.set(e.pointerId, [e.clientX, e.clientY]);
-    if (pinch && ptrs.size >= 2) { const [a, b] = [...ptrs.values()]; const d = Math.hypot(a[0] - b[0], a[1] - b[1]); mmView.R = clamp(pinch.R * pinch.d / Math.max(20, d), 150, 2600); MMR = mmView.R; return; }
+    if (pinch && ptrs.size >= 2) { const [a, b] = [...ptrs.values()]; const d = Math.hypot(a[0] - b[0], a[1] - b[1]); mmView.R = clamp(pinch.R * pinch.d / Math.max(20, d), 150, 6000); MMR = mmView.R; return; }
     if (drag) { const r = mmEl.getBoundingClientRect(), k = (MMR * 2) / r.width, dx = e.clientX - drag.x, dy = e.clientY - drag.y; if (Math.hypot(dx, dy) > 8) drag.moved = true; if (drag.moved) { mmView.cx = drag.cx - dx * k; mmView.cz = drag.cz - dy * k; } }
   });
   const up = e => { if (!ptrs.has(e.pointerId)) return; ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch = null; if (ptrs.size === 0 && drag) { if (!drag.moved && mmBig) setWaypoint(...mmToWorld(e.clientX, e.clientY)); drag = null; } };
@@ -1054,7 +1077,7 @@ function drawMinimap() {
   const ccx = mmBig ? mmView.cx : px, ccz = mmBig ? mmView.cz : pz;
   const X = x => MMS / 2 + (x - ccx) * sc, Z = z => MMS / 2 + (z - ccz) * sc;
   mm.fillStyle = '#4c7a4a'; mm.fillRect(0, 0, MMS, MMS);
-  { const top = Math.max(0, Z(-1650)); mm.fillStyle = '#e9d59a'; mm.fillRect(X(HALF + 8), top, (SHORE - HALF) * sc, MMS); mm.fillStyle = '#1f7fb0'; mm.fillRect(X(SHORE), top, MMS, MMS); }
+  { const top = Math.max(0, Z(-1650)), hh = Math.min(MMS, Z(5600)) - top; mm.fillStyle = '#e9d59a'; mm.fillRect(X(HALF + 8), top, (SHORE - HALF) * sc, hh); mm.fillStyle = '#1f7fb0'; mm.fillRect(X(SHORE), top, MMS, hh); }
   mm.fillStyle = '#b8b4aa'; mm.fillRect(X(-70), Z(-380), 110 * sc, 160 * sc);
   mm.fillStyle = '#1f7fb0'; mm.fillRect(X(port.waterRect.minX), Z(port.waterRect.minZ), (port.waterRect.maxX - port.waterRect.minX + 18) * sc, 160 * sc);
   mm.fillStyle = '#555'; mm.fillRect(X(-10), Z(-380), 20 * sc, 200 * sc); for (const zz of [-340, -260]) mm.fillRect(X(-70), Z(zz - 10), 110 * sc, 20 * sc);
@@ -1067,11 +1090,13 @@ function drawMinimap() {
   mm.fillRect(X(-160), Z(1700), 20 * sc, 300 * sc); mm.fillRect(X(-300), Z(1840), 300 * sc, 20 * sc);
   mm.fillStyle = '#999'; for (const l of lots) mm.fillRect(X(l.cx - LOT / 2), Z(l.cz - LOT / 2), LOT * sc, LOT * sc);
   mm.fillStyle = '#5fae5a'; for (const l of lots) if (l.park) mm.fillRect(X(l.cx - LOT / 2 + 3), Z(l.cz - LOT / 2 + 3), (LOT - 6) * sc, (LOT - 6) * sc);
-  mm.fillStyle = '#d8d8d8'; for (const c of colliders) mm.fillRect(X(c.minX), Z(c.minZ), (c.maxX - c.minX) * sc, (c.maxZ - c.minZ) * sc);
+  for (const c of CITIES) { const b = c.bounds; if (X(b.maxX) < 0 || X(b.minX) > MMS || Z(b.maxZ) < 0 || Z(b.minZ) > MMS) continue; mm.fillStyle = '#999'; mm.fillRect(X(b.minX), Z(b.minZ), (b.maxX - b.minX) * sc, (b.maxZ - b.minZ) * sc); mm.fillStyle = '#5fae5a'; for (const p of c.parks) mm.fillRect(X(p.x - p.s / 2), Z(p.z - p.s / 2), p.s * sc, p.s * sc); mm.fillStyle = '#555'; for (const r of c.streets) mm.fillRect(X(r.minX), Z(r.minZ), (r.maxX - r.minX) * sc, (r.maxZ - r.minZ) * sc); }
+  const vx0 = ccx - MMR - 5, vx1 = ccx + MMR + 5, vz0 = ccz - MMR - 5, vz1 = ccz + MMR + 5;
+  mm.fillStyle = '#d8d8d8'; for (const c of colliders) if (c.maxX > vx0 && c.minX < vx1 && c.maxZ > vz0 && c.minZ < vz1) mm.fillRect(X(c.minX), Z(c.minZ), (c.maxX - c.minX) * sc, (c.maxZ - c.minZ) * sc);
   { const lab = (x, z, t) => { const lx = X(x), lz = Z(z); if (lx < 10 || lz < 10 || lx > MMS - 10 || lz > MMS - 10) return; const f = mmBig ? 15 : 10; mm.font = `bold ${f}px Arial`; mm.textAlign = 'center'; const w = mm.measureText(t).width + 8; mm.fillStyle = '#1d4fb8'; mm.fillRect(lx - w / 2, lz - f * 0.8, w, f * 1.4); mm.strokeStyle = '#fff'; mm.lineWidth = 1.5; mm.strokeRect(lx - w / 2, lz - f * 0.8, w, f * 1.4); mm.fillStyle = '#fff'; mm.fillText(t, lx, lz + f * 0.35); };
     for (const h of HWS) { const sp = mmBig ? MMR * 0.5 : 160; let acc = -sp / 2; for (const g of h.segs) { let t0 = 0; while (acc + g.len * (1 - t0) >= 0) { const need = -acc; const t = t0 + need / g.len; if (t > 1) break; lab(g.a.x + (g.b.x - g.a.x) * t, g.a.z + (g.b.z - g.a.z) * t, 'I-' + h.number); t0 = t; acc = -sp; } acc += g.len * (1 - t0); } }
     if (MMR < 1500) { lab((IS.x0 + IS.x1) / 2 - 40, IS.z, 'I-395'); lab(FW.x, -60, 'VB-1'); }
-    if (mmBig) { mm.font = 'bold 18px Arial'; mm.fillStyle = '#fff'; mm.textAlign = 'center'; mm.fillText('VICE BAY', X(0), Z(0)); mm.fillText('PORT CORAL', X(20), Z(-300)); mm.fillText('VICE BAY INTL ✈', X(-1970), Z(-260)); mm.fillText('PALMETTO SPRINGS', X(-150), Z(1830)); mm.fillText('VICE BAY HEIGHTS', X(-450), Z(-185)); mm.fillText('GATOR GLADES', X(100), Z(-2125)); } }
+    if (mmBig) { mm.font = 'bold 18px Arial'; mm.fillStyle = '#fff'; mm.textAlign = 'center'; mm.fillText('VICE BAY', X(0), Z(0)); mm.fillText('PORT CORAL', X(20), Z(-300)); mm.fillText('VICE BAY INTL ✈', X(-1970), Z(-260)); mm.fillText('PALMETTO SPRINGS', X(-150), Z(1830)); mm.fillText('VICE BAY HEIGHTS', X(-450), Z(-185)); mm.fillText('GATOR GLADES', X(100), Z(-2125)); for (const c of CITIES) mm.fillText(c.name.toUpperCase(), X(c.center.x), Z(c.bounds.minZ - 14)); } }
   const dot = (x, z, col, r = 5, txt) => { if (mmBig) r *= 1.3; mm.fillStyle = col; mm.beginPath(); mm.arc(clamp(X(x), 8, MMS - 8), clamp(Z(z), 8, MMS - 8), r, 0, 7); mm.fill(); if (txt) { mm.fillStyle = '#fff'; mm.font = 'bold 11px Arial'; mm.textAlign = 'center'; mm.fillText(txt, clamp(X(x), 8, MMS - 8), clamp(Z(z), 8, MMS - 8) + 4); } };
   const tgt = state.mission?.target;
   if (tgt) { const r = route(px, pz, tgt.x, tgt.z); if (tgt.z < -EDGE || pz < -EDGE) { r.length = 0; if (pz < -EDGE && tgt.z > -EDGE) { r.push([px, pz], [0, pz], [0, -180], ...route(0, -180, tgt.x, tgt.z)); } else if (tgt.z < -EDGE && pz > -EDGE) { r.push(...route(px, pz, 0, -180), [0, -180], [0, tgt.z], [tgt.x, tgt.z]); } else r.push([px, pz], [0, pz], [0, tgt.z], [tgt.x, tgt.z]); } mm.strokeStyle = '#ff5e7e'; mm.lineWidth = 5; mm.beginPath(); r.forEach(([x, z], i) => i ? mm.lineTo(X(x), Z(z)) : mm.moveTo(X(x), Z(z))); mm.stroke(); }
