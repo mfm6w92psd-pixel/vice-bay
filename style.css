@@ -63,6 +63,11 @@ html,body{margin:0;height:100%;overflow:hidden;background:#000;font-family:-appl
 @keyframes streetIn{0%{opacity:0;transform:translateX(-10px)}10%{opacity:1;transform:none}75%{opacity:1}100%{opacity:.55}}
 
 #minimap.big{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(92vw,88vh);height:min(92vw,88vh);border-radius:14px;z-index:50}
-#mmhint{position:fixed;left:50%;bottom:4vh;transform:translateX(-50%);color:#fff;font:bold 14px Arial;text-shadow:0 1px 3px #000;z-index:51;display:none;pointer-events:none}
+#mmhint{position:fixed;left:50%;bottom:calc(50% - min(46vw,44vh) + 8px);transform:translateX(-50%);color:#fff;font:bold 14px Arial;text-shadow:0 1px 3px #000;z-index:51;display:none;pointer-events:none}
 
 #btnRadio{right:170px;bottom:130px}#buttons.left #btnRadio{right:auto;left:170px}
+
+#mmctl{position:fixed;display:none;flex-direction:column;gap:8px;z-index:52;top:calc(50% - min(46vw,44vh) + 10px);right:calc(50% - min(46vw,44vh) + 10px);pointer-events:auto}
+#mmctl button{width:44px;height:44px;border-radius:10px;border:2px solid #fff;background:rgba(20,24,40,.85);color:#fff;font:bold 20px Arial;padding:0}
+#mmctl #mmClear{font-size:13px}
+#wpdist{margin-top:4px;color:#ff7ac0;font:bold 14px Arial;text-shadow:0 1px 3px #000;display:none;pointer-events:none}

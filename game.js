@@ -1006,9 +1006,41 @@ function updateEnv(dt) {
 
 // ---------- minimap ----------
 const mmEl = $('minimap'), mm = mmEl.getContext('2d'); let MMS = 280, MMR = 170, mmBig = false; // canvas px, world range radius in units
-function toggleBigMap(e) { if (e) { e.preventDefault(); e.stopPropagation(); } mmBig = !mmBig; mmEl.classList.toggle('big', mmBig); MMS = mmBig ? 720 : 280; MMR = mmBig ? 700 : 170; mmEl.width = mmEl.height = MMS; $('mmhint').style.display = mmBig ? 'block' : 'none'; }
-mmEl.addEventListener('touchstart', toggleBigMap, { passive: false }); mmEl.addEventListener('mousedown', toggleBigMap);
-addEventListener('keydown', e => { if (e.code === 'KeyM') toggleBigMap(); });
+const mmView = { cx: 0, cz: 0, R: 800 }, MM_ZOOMS = [300, 600, 1200, 2400];
+function playerXZ() { return player.car ? [player.car.x, player.car.z] : [player.x, player.z]; }
+function toggleBigMap(e) {
+  if (e) { e.preventDefault(); e.stopPropagation(); } mmBig = !mmBig; mmEl.classList.toggle('big', mmBig); MMS = mmBig ? 720 : 280; MMR = mmBig ? mmView.R : 170; mmEl.width = mmEl.height = MMS;
+  if (mmBig) { const [x, z] = playerXZ(); mmView.cx = x; mmView.cz = z; }
+  $('mmhint').style.display = $('mmctl').style.display = mmBig ? 'flex' : 'none';
+}
+function mmZoom(f) { mmView.R = clamp(mmView.R * f, 150, 2600); MMR = mmView.R; }
+function mmToWorld(cxp, cyp) { const r = mmEl.getBoundingClientRect(), u = (cxp - r.left) / r.width * MMS, v = (cyp - r.top) / r.height * MMS, sc = MMS / 2 / MMR; return [mmView.cx + (u - MMS / 2) / sc, mmView.cz + (v - MMS / 2) / sc]; }
+function setWaypoint(x, z) {
+  const w = state.waypoint; if (w && Math.hypot(w.x - x, w.z - z) < MMR * 0.06) { state.waypoint = null; showMsg('Waypoint cleared', 1.5); return; }
+  state.waypoint = { x, z }; audio.pickup?.(); showMsg(allowedAt(x, z) ? '📍 Waypoint set: ' + streetName(x, z) : '📍 Waypoint set', 2);
+}
+{
+  const ptrs = new Map(); let drag = null, pinch = null;
+  mmEl.style.touchAction = 'none';
+  mmEl.addEventListener('pointerdown', e => {
+    e.preventDefault(); e.stopPropagation(); if (!mmBig) { toggleBigMap(); return; }
+    ptrs.set(e.pointerId, [e.clientX, e.clientY]); mmEl.setPointerCapture?.(e.pointerId);
+    if (ptrs.size === 1) drag = { x: e.clientX, y: e.clientY, cx: mmView.cx, cz: mmView.cz, moved: false };
+    else if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), R: mmView.R }; if (drag) drag.moved = true; }
+  });
+  mmEl.addEventListener('pointermove', e => {
+    if (!mmBig || !ptrs.has(e.pointerId)) return; e.preventDefault(); ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+    if (pinch && ptrs.size >= 2) { const [a, b] = [...ptrs.values()]; const d = Math.hypot(a[0] - b[0], a[1] - b[1]); mmView.R = clamp(pinch.R * pinch.d / Math.max(20, d), 150, 2600); MMR = mmView.R; return; }
+    if (drag) { const r = mmEl.getBoundingClientRect(), k = (MMR * 2) / r.width, dx = e.clientX - drag.x, dy = e.clientY - drag.y; if (Math.hypot(dx, dy) > 8) drag.moved = true; if (drag.moved) { mmView.cx = drag.cx - dx * k; mmView.cz = drag.cz - dy * k; } }
+  });
+  const up = e => { if (!ptrs.has(e.pointerId)) return; ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch = null; if (ptrs.size === 0 && drag) { if (!drag.moved && mmBig) setWaypoint(...mmToWorld(e.clientX, e.clientY)); drag = null; } };
+  mmEl.addEventListener('pointerup', up); mmEl.addEventListener('pointercancel', e => { ptrs.delete(e.pointerId); drag = null; pinch = null; });
+  mmEl.addEventListener('wheel', e => { if (!mmBig) return; e.preventDefault(); mmZoom(e.deltaY > 0 ? 1.25 : 0.8); }, { passive: false });
+  const btn = (id, fn) => { const el = $(id); const go = e => { e.preventDefault(); e.stopPropagation(); fn(); }; el.addEventListener('touchstart', go, { passive: false }); el.addEventListener('mousedown', go); };
+  btn('mmClose', () => { if (mmBig) toggleBigMap(); }); btn('mmIn', () => mmZoom(0.6)); btn('mmOut', () => mmZoom(1.6));
+  btn('mmMe', () => { const [x, z] = playerXZ(); mmView.cx = x; mmView.cz = z; }); btn('mmClear', () => { state.waypoint = null; showMsg('Waypoint cleared', 1.5); });
+}
+addEventListener('keydown', e => { if (e.code === 'KeyM') toggleBigMap(); if (mmBig && (e.key === '+' || e.key === '=')) mmZoom(0.7); if (mmBig && e.key === '-') mmZoom(1.4); });
 function route(fx, fz, tx, tz) { // BFS on road grid
   const near = (x, z) => [clamp(Math.round((x + HALF) / B), 0, N), clamp(Math.round((z + HALF) / B), 0, N)];
   const [si, sj] = near(fx, fz), [ti, tj] = near(tx, tz);
@@ -1019,9 +1051,10 @@ function route(fx, fz, tx, tz) { // BFS on road grid
 }
 function drawMinimap() {
   const px = player.car ? player.car.x : player.x, pz = player.car ? player.car.z : player.z, sc = MMS / 2 / MMR;
-  const X = x => MMS / 2 + (x - px) * sc, Z = z => MMS / 2 + (z - pz) * sc;
+  const ccx = mmBig ? mmView.cx : px, ccz = mmBig ? mmView.cz : pz;
+  const X = x => MMS / 2 + (x - ccx) * sc, Z = z => MMS / 2 + (z - ccz) * sc;
   mm.fillStyle = '#4c7a4a'; mm.fillRect(0, 0, MMS, MMS);
-  mm.fillStyle = '#e9d59a'; mm.fillRect(X(HALF + 8), 0, (SHORE - HALF) * sc, MMS); mm.fillStyle = '#1f7fb0'; mm.fillRect(X(SHORE), 0, MMS, MMS);
+  { const top = Math.max(0, Z(-1650)); mm.fillStyle = '#e9d59a'; mm.fillRect(X(HALF + 8), top, (SHORE - HALF) * sc, MMS); mm.fillStyle = '#1f7fb0'; mm.fillRect(X(SHORE), top, MMS, MMS); }
   mm.fillStyle = '#b8b4aa'; mm.fillRect(X(-70), Z(-380), 110 * sc, 160 * sc);
   mm.fillStyle = '#1f7fb0'; mm.fillRect(X(port.waterRect.minX), Z(port.waterRect.minZ), (port.waterRect.maxX - port.waterRect.minX + 18) * sc, 160 * sc);
   mm.fillStyle = '#555'; mm.fillRect(X(-10), Z(-380), 20 * sc, 200 * sc); for (const zz of [-340, -260]) mm.fillRect(X(-70), Z(zz - 10), 110 * sc, 20 * sc);
@@ -1036,8 +1069,8 @@ function drawMinimap() {
   mm.fillStyle = '#5fae5a'; for (const l of lots) if (l.park) mm.fillRect(X(l.cx - LOT / 2 + 3), Z(l.cz - LOT / 2 + 3), (LOT - 6) * sc, (LOT - 6) * sc);
   mm.fillStyle = '#d8d8d8'; for (const c of colliders) mm.fillRect(X(c.minX), Z(c.minZ), (c.maxX - c.minX) * sc, (c.maxZ - c.minZ) * sc);
   { const lab = (x, z, t) => { const lx = X(x), lz = Z(z); if (lx < 10 || lz < 10 || lx > MMS - 10 || lz > MMS - 10) return; const f = mmBig ? 15 : 10; mm.font = `bold ${f}px Arial`; mm.textAlign = 'center'; const w = mm.measureText(t).width + 8; mm.fillStyle = '#1d4fb8'; mm.fillRect(lx - w / 2, lz - f * 0.8, w, f * 1.4); mm.strokeStyle = '#fff'; mm.lineWidth = 1.5; mm.strokeRect(lx - w / 2, lz - f * 0.8, w, f * 1.4); mm.fillStyle = '#fff'; mm.fillText(t, lx, lz + f * 0.35); };
-    for (const h of HWS) h.segs.forEach(g => { const n = Math.max(1, Math.round(g.len / (mmBig ? 400 : 160))); for (let k = 0; k < n; k++) { const t = (k + 0.5) / n; lab(g.a.x + (g.b.x - g.a.x) * t, g.a.z + (g.b.z - g.a.z) * t, 'I-' + h.number); } });
-    lab((IS.x0 + IS.x1) / 2 - 40, IS.z, 'I-395'); lab(FW.x, -60, 'VB-1');
+    for (const h of HWS) { const sp = mmBig ? MMR * 0.5 : 160; let acc = -sp / 2; for (const g of h.segs) { let t0 = 0; while (acc + g.len * (1 - t0) >= 0) { const need = -acc; const t = t0 + need / g.len; if (t > 1) break; lab(g.a.x + (g.b.x - g.a.x) * t, g.a.z + (g.b.z - g.a.z) * t, 'I-' + h.number); t0 = t; acc = -sp; } acc += g.len * (1 - t0); } }
+    if (MMR < 1500) { lab((IS.x0 + IS.x1) / 2 - 40, IS.z, 'I-395'); lab(FW.x, -60, 'VB-1'); }
     if (mmBig) { mm.font = 'bold 18px Arial'; mm.fillStyle = '#fff'; mm.textAlign = 'center'; mm.fillText('VICE BAY', X(0), Z(0)); mm.fillText('PORT CORAL', X(20), Z(-300)); mm.fillText('VICE BAY INTL ✈', X(-1970), Z(-260)); mm.fillText('PALMETTO SPRINGS', X(-150), Z(1830)); mm.fillText('VICE BAY HEIGHTS', X(-450), Z(-185)); mm.fillText('GATOR GLADES', X(100), Z(-2125)); } }
   const dot = (x, z, col, r = 5, txt) => { if (mmBig) r *= 1.3; mm.fillStyle = col; mm.beginPath(); mm.arc(clamp(X(x), 8, MMS - 8), clamp(Z(z), 8, MMS - 8), r, 0, 7); mm.fill(); if (txt) { mm.fillStyle = '#fff'; mm.font = 'bold 11px Arial'; mm.textAlign = 'center'; mm.fillText(txt, clamp(X(x), 8, MMS - 8), clamp(Z(z), 8, MMS - 8) + 4); } };
   const tgt = state.mission?.target;
@@ -1047,15 +1080,23 @@ function drawMinimap() {
   for (const p of pickups) dot(p.x, p.z, '#' + PK[p.kind][0].toString(16).padStart(6, '0'), 3);
   for (const v of vehicles) if (v.type === 'police' && !v.dead) dot(v.x, v.z, Math.floor(state.now * 6) % 2 ? '#ff2d2d' : '#2d6bff', 5);
   if (tgt) dot(tgt.x, tgt.z, '#ff5e7e', 7);
+  const wp = state.waypoint;
+  if (wp) {
+    mm.save(); mm.setLineDash([8, 6]); mm.strokeStyle = '#ff2d9a'; mm.lineWidth = mmBig ? 4 : 3; mm.beginPath(); mm.moveTo(X(px), Z(pz)); mm.lineTo(X(wp.x), Z(wp.z)); mm.stroke(); mm.restore();
+    const wx = clamp(X(wp.x), 10, MMS - 10), wz = clamp(Z(wp.z), 10, MMS - 10), k = mmBig ? 1.6 : 1;
+    mm.fillStyle = '#ff2d9a'; mm.strokeStyle = '#fff'; mm.lineWidth = 2; mm.beginPath(); mm.arc(wx, wz - 10 * k, 7 * k, Math.PI * 0.85, Math.PI * 2.15); mm.lineTo(wx, wz); mm.closePath(); mm.fill(); mm.stroke();
+    mm.fillStyle = '#fff'; mm.beginPath(); mm.arc(wx, wz - 10 * k, 2.6 * k, 0, 7); mm.fill();
+  }
   // player arrow
   const h = player.car ? player.car.heading : player.heading;
-  mm.save(); mm.translate(MMS / 2, MMS / 2); mm.rotate(-h); if (mmBig) mm.scale(1.5, 1.5); mm.fillStyle = '#fff'; mm.strokeStyle = '#000'; mm.lineWidth = 2;
+  mm.save(); mm.translate(X(px), Z(pz)); mm.rotate(-h); if (mmBig) mm.scale(1.5, 1.5); mm.fillStyle = '#fff'; mm.strokeStyle = '#000'; mm.lineWidth = 2;
   mm.beginPath(); mm.moveTo(0, -11); mm.lineTo(8, 9); mm.lineTo(0, 4); mm.lineTo(-8, 9); mm.closePath(); mm.fill(); mm.stroke(); mm.restore();
 }
 
 // ---------- HUD ----------
 let lastHud = 0;
 function updateHud() {
+  { const w = state.waypoint, el = $('wpdist'); if (w) { const [x, z] = playerXZ(), d = Math.hypot(w.x - x, w.z - z); if (d < 18) { state.waypoint = null; showMsg('📍 You have arrived', 2); el.style.display = 'none'; } else { el.style.display = 'block'; el.textContent = '📍 ' + (d >= 1000 ? (d / 1000).toFixed(1) + ' km' : Math.round(d) + ' m'); } } else el.style.display = 'none'; }
   $('money').textContent = '$' + Math.floor(player.money).toLocaleString('en-US');
   const st = $('stars'); [...st.children].forEach((s, i) => s.classList.toggle('on', i < state.wanted)); st.classList.toggle('blink', state.wanted > 0 && state.unseen > 0);
   const mins = Math.floor(state.time * 1440), hh = String(Math.floor(mins / 60)).padStart(2, '0'), mn = String(mins % 60).padStart(2, '0');
