@@ -21,6 +21,7 @@ export const PROPERTIES = [
   { id: 'marina', name: 'Palm Harbor Marina', icon: '⛵', price: 10000, income: 580, x: -7000, z: 850, area: 'Palm Harbor' },
   { id: 'pier', name: 'Pelican Pier Seafood', icon: '🦐', price: 7000, income: 400, x: -2300, z: -3650, area: 'Pelican Bay' },
   { id: 'golf', name: 'Coral Springs Country Club', icon: '⛳', price: 9000, income: 510, x: -3300, z: -750, area: 'Coral Springs' },
+  { id: 'cedar', name: 'Cedar Key Fish Camp', icon: '🎣', price: 5000, income: 290, x: -5840, z: -3940, area: 'Cedar Key' },
 ];
 const PAY_EVERY = 60;          // real seconds between payouts (= 2 in-game hours at 12 min/day)
 const SAFE_CAP = 10;           // safe holds at most 10 payouts
