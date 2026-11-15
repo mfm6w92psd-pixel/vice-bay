@@ -134,7 +134,7 @@ for (let z = -HALF; z <= HALF; z += 18) { const p = M.makePalm(); p.position.set
 for (let k = 0; k < 60; k++) {
   const side = k % 3, t = rand(-HALF - 20, HALF + 20);
   const p = M.makePalm(9 + Math.random() * 4);
-  if (side === 0) p.position.set(-HALF - 44 - rand(0, 25), 0, t); else if (side === 1) { if (t > -85 && t < 115) continue; p.position.set(t, 0, -HALF - 22 - rand(0, 30)); } else p.position.set(t, 0, HALF + 22 + rand(0, 30));
+  if (side === 0) p.position.set(-HALF - 44 - rand(0, 25), 0, t); else if (side === 1) { if (t > -85 && t < 115) continue; p.position.set(t, 0, -HALF - 22 - rand(0, 30)); } else p.position.set(t, 0, HALF + 82 + rand(0, 30));
   scene.add(p);
 }
 POI.beach = { x: SHORE - 8, z: 30, label: 'BEACH SHACK' };
@@ -146,7 +146,7 @@ for (const z of [-197, -213]) { const r = M.makeRoad(20, false); r.position.set(
 const PORT = { minX: -72, maxX: 110, minZ: -385, maxZ: -180 };
 const inPort = (x, z) => x >= PORT.minX && x <= PORT.maxX && z >= PORT.minZ && z <= PORT.maxZ;
 const inWater = (x, z) => x > SHORE + 2 || (x >= port.waterRect.minX + 5 && x <= port.waterRect.maxX && z >= port.waterRect.minZ && z <= port.waterRect.maxZ);
-const allowedAt = (x, z, foot) => inFwZone(x, z) || (x >= -EDGE - (foot ? 30 : 0) && x <= (foot ? FOOT_MAX_X : FOOT_MAX_X) && z >= -EDGE - (foot ? 30 : 0) && z <= EDGE + (foot ? 30 : 0)) || inPort(x, z);
+const allowedAt = (x, z, foot) => inFwZone(x, z) || inIsZone(x, z) || (x >= -EDGE - (foot ? 30 : 0) && x <= (foot ? FOOT_MAX_X : FOOT_MAX_X) && z >= -EDGE - (foot ? 30 : 0) && z <= EDGE + (foot ? 30 : 0)) || inPort(x, z);
 POI.garage = { x: port.pois.garage.x, z: port.pois.garage.z, label: 'PORT CORAL CUSTOMS' };
 POI.diner = { x: port.pois.diner.x, z: port.pois.diner.z, label: 'CORAL DINER' };
 POI.gas = { x: port.pois.gasStation.x, z: port.pois.gasStation.z, label: 'FUEL' };
@@ -166,6 +166,54 @@ for (const s of [-1, 1]) addCol(FW.x + s * (FW.W / 2 + 1.2), (FW.z0 + FW.z1) / 2
 const inFwZone = (x, z) => (x >= FW.x - FW.W / 2 - 1 && x <= -180 && z >= FW.z0 - 12 && z <= FW.z1 + 12) || (x >= -217 && x <= -66 && z >= FW.z0 - 12 && z <= FW.z0 + 10) || (x >= -217 && x <= -168 && z >= 180 && z <= 216);
 // surface height under a thing at (x,z) that is currently at height y (ramp/deck vs. ground underneath)
 const surfaceY = (x, z, y = 0) => { const h = fw.heightAt(x, z); return h > 0 && y + 1.6 >= h ? h : 0; };
+// ---------- Interstate 95 along the south edge (ground level, 4 lanes + median) ----------
+const IS = { z: 240, W: 26, x0: -216, x1: 196, cons: [0, 120] };
+const isShield = (num) => { const c = document.createElement('canvas'); c.width = 128; c.height = 128; const g = c.getContext('2d');
+  g.fillStyle = '#fff'; g.beginPath(); g.moveTo(8, 10); g.lineTo(120, 10); g.quadraticCurveTo(124, 70, 64, 122); g.quadraticCurveTo(4, 70, 8, 10); g.fill();
+  g.fillStyle = '#1d4fb8'; g.beginPath(); g.moveTo(14, 38); g.lineTo(114, 38); g.quadraticCurveTo(116, 74, 64, 114); g.quadraticCurveTo(12, 74, 14, 38); g.fill();
+  g.fillStyle = '#c8102e'; g.fillRect(14, 16, 100, 20); g.fillStyle = '#fff'; g.font = 'bold 14px Arial'; g.textAlign = 'center'; g.fillText('INTERSTATE', 64, 31);
+  g.font = 'bold 46px Arial'; g.fillText(num, 64, 92); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; };
+const isGreen = (lines) => { const c = document.createElement('canvas'); c.width = 512; c.height = 160; const g = c.getContext('2d');
+  g.fillStyle = '#0b6b3a'; g.fillRect(0, 0, 512, 160); g.strokeStyle = '#fff'; g.lineWidth = 6; g.strokeRect(6, 6, 500, 148); g.fillStyle = '#fff'; g.textAlign = 'center';
+  g.font = 'bold 50px Arial'; g.fillText(lines[0], 256, 66); g.font = 'bold 36px Arial'; g.fillText(lines[1], 256, 124); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; };
+{
+  const L = IS.x1 - IS.x0 + 16, cx = (IS.x0 + IS.x1) / 2 + 8;
+  const c = document.createElement('canvas'); c.width = 256; c.height = 256; const g = c.getContext('2d');
+  g.fillStyle = '#34343a'; g.fillRect(0, 0, 256, 256); g.fillStyle = '#f2c230'; g.fillRect(0, 8, 256, 4); g.fillRect(0, 244, 256, 4);
+  g.fillStyle = '#fff'; for (const y of [68, 188]) for (let x = 0; x < 256; x += 64) g.fillRect(x, y - 2, 34, 4);
+  g.fillStyle = '#f2c230'; g.fillRect(0, 118, 256, 3); g.fillRect(0, 135, 256, 3);
+  const t = new THREE.CanvasTexture(c); t.wrapS = THREE.RepeatWrapping; t.repeat.set(L / 26, 1); t.colorSpace = THREE.SRGBColorSpace;
+  const road = new THREE.Mesh(new THREE.PlaneGeometry(L, IS.W), new THREE.MeshStandardMaterial({ map: t, roughness: 0.9 }));
+  road.rotation.x = -Math.PI / 2; road.position.set(cx, 0.02, IS.z); road.receiveShadow = true; scene.add(road);
+  const am = M.mat(0x3a3a40);
+  const add = (w, d, x, z) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), am); m.rotation.x = -Math.PI / 2; m.position.set(x, 0.016, z); m.receiveShadow = true; scene.add(m); };
+  add(24, 36, -205, IS.z - 26);                 // VB-1 south end -> I-95
+  for (const x of IS.cons) add(RW, IS.z - IS.W / 2 - 180 + 2, x, (180 + IS.z - IS.W / 2) / 2);   // city on-ramps
+  add(34, 34, IS.x1 + 12, IS.z);                 // turnaround by the beach
+  // median barrier (gaps at the ends and at each on-ramp so you can U-turn / merge)
+  const gaps = [[IS.x0 - 10, IS.x0 + 22], ...IS.cons.map(x => [x - 10, x + 10]), [IS.x1 - 6, IS.x1 + 40]];
+  let sx = IS.x0 + 22; for (const [a, b] of gaps.slice(1)) { const w = a - sx; if (w > 2) { const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.9, 0.6), M.mat(0xd2d2d2)); m.position.set(sx + w / 2, 0.45, IS.z); m.castShadow = true; scene.add(m); addCol(sx + w / 2, IS.z, w, 0.6, 0.9); } sx = b; }
+  // outer guard rails (south side everywhere, north side except at on-ramps)
+  const rail = (x0, x1, z) => { const w = x1 - x0; if (w < 2) return; const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.7, 0.3), M.mat(0xb8bcc2)); m.position.set((x0 + x1) / 2, 0.55, z); scene.add(m); addCol((x0 + x1) / 2, z, w, 0.4, 1); };
+  rail(IS.x0 + 6, IS.x1 + 28, IS.z + IS.W / 2 + 0.6);
+  let rx = IS.x0 + 14; for (const x of [...IS.cons, IS.x1 + 30]) { rail(rx, x - RW / 2 - 1, IS.z - IS.W / 2 - 0.6); rx = x + RW / 2 + 1; }
+  // shields and overhead signs
+  const sm = new THREE.MeshBasicMaterial({ map: isShield('95'), transparent: true, side: THREE.DoubleSide });
+  const shieldAt = (x, z, ry) => { const p = new THREE.Mesh(new THREE.BoxGeometry(0.2, 4, 0.2), M.mat(0x777777)); p.position.set(x, 2, z); scene.add(p); const s = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 2.6), sm); s.position.set(x, 4.6, z); s.rotation.y = ry; scene.add(s); };
+  for (const x of IS.cons) { shieldAt(x + RW / 2 + 1.5, 200, 0); shieldAt(x - RW / 2 - 1.5, 200, 0); }
+  shieldAt(-190, 214, 0); shieldAt(-120, IS.z + IS.W / 2 + 2, Math.PI); shieldAt(60, IS.z + IS.W / 2 + 2, Math.PI); shieldAt(60, IS.z - IS.W / 2 - 2, 0);
+  const gantry = (x, east, west) => {
+    for (const s of [-1, 1]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.5, 8, 0.5), M.mat(0x666666)); p.position.set(x, 4, IS.z + s * (IS.W / 2 + 1)); scene.add(p); addCol(x, IS.z + s * (IS.W / 2 + 1), 0.6, 0.6, 8); }
+    const beam = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, IS.W + 2), M.mat(0x666666)); beam.position.set(x, 7.8, IS.z); scene.add(beam);
+    const e = new THREE.Mesh(new THREE.PlaneGeometry(9, 2.8), new THREE.MeshBasicMaterial({ map: isGreen(east) })); e.position.set(x - 0.3, 6.1, IS.z + IS.W / 4); e.rotation.y = -Math.PI / 2; scene.add(e);
+    const w = new THREE.Mesh(new THREE.PlaneGeometry(9, 2.8), new THREE.MeshBasicMaterial({ map: isGreen(west) })); w.position.set(x + 0.3, 6.1, IS.z - IS.W / 4); w.rotation.y = Math.PI / 2; scene.add(w);
+  };
+  gantry(-150, ['I-95 EAST', 'Downtown  Exit 1'], ['I-95 WEST', 'VB-1 North  ↑']);
+  gantry(60, ['I-95 EAST', 'Vice Bay Beach'], ['I-95 WEST', 'Downtown  Exit 1']);
+  gantry(170, ['I-95 EAST', 'END  1 km'], ['I-95 WEST', 'Exit 2  Bay Ave']);
+}
+const inIsZone = (x, z) => (x >= IS.x0 - 2 && x <= IS.x1 + 30 && z >= IS.z - IS.W / 2 - 1 && z <= IS.z + IS.W / 2 + 1) || (x >= IS.x1 - 6 && x <= IS.x1 + 30 && Math.abs(z - IS.z) <= 18) || (x >= -217 && x <= -192 && z >= 196 && z <= IS.z) || IS.cons.some(c => Math.abs(x - c) <= RW / 2 && z >= 180 && z <= IS.z);
+const isLanes = [{ z: IS.z + 3.2, dir: 1 }, { z: IS.z + 9, dir: 1 }, { z: IS.z - 3.2, dir: -1 }, { z: IS.z - 9, dir: -1 }];
 // ---------- traffic lights at every grid crossing ----------
 const tl = new TrafficLights(scene);
 for (const ix of lines) for (const iz of lines) if (Math.abs(ix) < HALF && Math.abs(iz) < HALF) tl.addIntersection(ix, iz, RW);
@@ -223,8 +271,9 @@ function streetSign(text) {
   }));
 }
 function streetName(x, z) {
-  if (fw.onDeck(x, z) && fw.heightAt(x, z) > 0) return 'Vice Bay Expressway (VB-1)';
-  if (inFwZone(x, z) && x < -183) return 'VB-1 Ramp';
+  if (fw.onDeck(x, z) && fw.heightAt(x, z) > 0) return 'Vice Bay Expressway (VB-1 / I-195)';
+  if (inFwZone(x, z) && x < -183 && z < 196) return 'VB-1 Ramp';
+  if (inIsZone(x, z)) return z > IS.z - IS.W / 2 - 1 ? (x > IS.x1 - 6 ? 'I-95 Turnaround' : 'Interstate 95') : 'I-95 On-Ramp';
   if (z < -EDGE + 4) { const ps = port.streetAt(x, z); if (ps) return ps + ', Port Coral'; if (inWater(x, z)) return 'Port Coral Harbor'; if (z < -222) return 'Port Coral'; return 'Dockside Ave'; }
   let bi = 0, bj = 0; lines.forEach((l, k) => { if (Math.abs(l - x) < Math.abs(lines[bi] - x)) bi = k; if (Math.abs(l - z) < Math.abs(lines[bj] - z)) bj = k; });
   const dx = Math.abs(lines[bi] - x), dz = Math.abs(lines[bj] - z);
@@ -420,7 +469,7 @@ function nearestVehicle(r) {
 function enterCar() {
   const v = nearestVehicle(player.swim ? 5.5 : 5); if (!v) return;
   if (v.kind === 'heli' && player.y > 1) return;
-  if (v.type === 'traffic' || v.type === 'fwtraffic') { const cops = vehicles.some(o => o.type === 'police' && Math.hypot(o.x - v.x, o.z - v.z) < 50); if (cops) addWanted(1); showMsg(`Carjacked a ${v.name}`); spawnFleeingDriver(v); }
+  if (v.type === 'traffic' || v.type === 'fwtraffic' || v.type === 'istraffic') { const cops = vehicles.some(o => o.type === 'police' && Math.hypot(o.x - v.x, o.z - v.z) < 50); if (cops) addWanted(1); showMsg(`Carjacked a ${v.name}`); spawnFleeingDriver(v); }
   if (v.type === 'police') { addWanted(2); showMsg('Stole a police cruiser!'); }
   v.type = 'player'; v.plan = null; player.car = v; player.mode = 'car'; player.mesh.visible = false;
   audio.startEngine(); if (settings.radio) audio.startRadio();
@@ -769,6 +818,25 @@ function updateFwTraffic(dt) {
     }
   }
 }
+// interstate traffic on I-95 (ground level, east-west)
+function updateIsTraffic(dt) {
+  const px = player.car ? player.car.x : player.x, pz = player.car ? player.car.z : player.z;
+  const near = Math.abs(pz - IS.z) < 150;
+  const list = vehicles.filter(v => v.type === 'istraffic');
+  for (const v of list) {
+    const lane = v.lane, ahead = vehicles.some(o => o !== v && !o.dead && Math.abs(o.z - v.z) < 2.2 && (o.x - v.x) * lane.dir > 0 && (o.x - v.x) * lane.dir < 14) || (!player.car && Math.abs(player.z - v.z) < 2 && (player.x - v.x) * lane.dir > 0 && (player.x - v.x) * lane.dir < 10);
+    v.speed += clamp((ahead ? 0 : v.cruise) - v.speed, -25 * dt, 6 * dt);
+    v.x += lane.dir * v.speed * dt; v.z += (lane.z - v.z) * Math.min(1, dt * 2); v.y = 0;
+    if (v.x < IS.x0 + 20 || v.x > IS.x1 - 10 || !near) removeVehicle(v);
+  }
+  if (near && list.length < 7 && Math.random() < dt * 0.9) {
+    const lane = pick(isLanes), x = clamp(px + rand(-130, 130), IS.x0 + 30, IS.x1 - 20);
+    if (Math.abs(x - px) > 40 && !vehicles.some(o => Math.abs(o.z - lane.z) < 3 && Math.abs(o.x - x) < 15)) {
+      const r = Math.random(), mk = r < 0.2 ? V.makeTruck() : r < 0.32 ? V.makeSportsCar(pick(M.CAR_COLORS)) : r < 0.4 ? V.makeBus() : r < 0.48 ? V.makeMotorcycle(pick(M.CAR_COLORS)) : null;
+      const v = addVehicle('istraffic', x, lane.z, lane.dir > 0 ? -Math.PI / 2 : Math.PI / 2, mk ? { mesh: mk } : {}); v.lane = lane; v.cruise = rand(24, 32); v.speed = v.cruise;
+    }
+  }
+}
 function updateHeli(v, dt) {
   const up = input.jump ? 1 : 0, down = input.sprint ? 1 : 0;
   v.vy += ((up - down) * 9 - v.vy) * Math.min(1, dt * 2.5);
@@ -878,6 +946,7 @@ function drawMinimap() {
   mm.fillStyle = '#1f7fb0'; mm.fillRect(X(port.waterRect.minX), Z(port.waterRect.minZ), (port.waterRect.maxX - port.waterRect.minX + 18) * sc, 160 * sc);
   mm.fillStyle = '#555'; mm.fillRect(X(-10), Z(-380), 20 * sc, 200 * sc); for (const zz of [-340, -260]) mm.fillRect(X(-70), Z(zz - 10), 110 * sc, 20 * sc);
   mm.fillStyle = '#6b6b72'; mm.fillRect(X(FW.x - FW.W / 2), Z(FW.z0), FW.W * sc, (FW.z1 - FW.z0) * sc); mm.fillRect(X(-215), Z(FW.z0 - 11), 150 * sc, 20 * sc); mm.fillRect(X(-215), Z(185), 47 * sc, 30 * sc);
+  mm.fillStyle = '#4a5a8a'; mm.fillRect(X(IS.x0), Z(IS.z - IS.W / 2), (IS.x1 - IS.x0 + 28) * sc, IS.W * sc); mm.fillRect(X(-217), Z(196), 25 * sc, (IS.z - 196) * sc); for (const c of IS.cons) mm.fillRect(X(c - RW / 2), Z(180), RW * sc, (IS.z - 180) * sc);
   mm.fillStyle = '#999'; for (const l of lots) mm.fillRect(X(l.cx - LOT / 2), Z(l.cz - LOT / 2), LOT * sc, LOT * sc);
   mm.fillStyle = '#5fae5a'; for (const l of lots) if (l.park) mm.fillRect(X(l.cx - LOT / 2 + 3), Z(l.cz - LOT / 2 + 3), (LOT - 6) * sc, (LOT - 6) * sc);
   mm.fillStyle = '#d8d8d8'; for (const c of colliders) mm.fillRect(X(c.minX), Z(c.minZ), (c.maxX - c.minX) * sc, (c.maxZ - c.minZ) * sc);
@@ -1013,7 +1082,7 @@ function frame(nowMs) {
     const c = player.car, [hx, hz] = fwd(c.heading); state.redCD = (state.redCD || 0) - dt;
     if (state.redCD <= 0 && tl.ranRed(c.x, c.z, hx, hz, Math.abs(c.speed))) { state.redCD = 4; const cop = vehicles.some(o => o.type === 'police' && !o.dead && Math.hypot(o.x - c.x, o.z - c.z) < 45); if (cop && state.wanted === 0) { addWanted(1); showMsg('A cop saw you run a red light!'); } }
   }
-  updateFwTraffic(dt);
+  updateFwTraffic(dt); updateIsTraffic(dt);
   if (state.mission && state.mission._started && !cutLines) state.mission.def.update(state.mission, dt);
   updateInteractions(dt); updateEnv(dt); updateFx(dt); updateCamera(dt);
   if (msgTimer > 0) { msgTimer -= dt; if (msgTimer <= 0) $('msg').classList.remove('show'); }
