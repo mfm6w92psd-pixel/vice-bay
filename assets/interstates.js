@@ -69,7 +69,7 @@ export function buildInterstate(scene, { number = 95, name = 'Vice Bay', points,
     const a = P[i], b = P[i + 1], len = a.distanceTo(b), dir = b.clone().sub(a).normalize(), ang = Math.atan2(dir.x, dir.z);
     segs.push({ a, b, len, dir, ang, right: new THREE.Vector3(dir.z, 0, -dir.x) });
     const t = roadTexture().clone(); t.needsUpdate = true; t.repeat.set(1, len / 20);
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(W, len), new THREE.MeshStandardMaterial({ map: t, roughness: 0.9 }));
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(W, len), new THREE.MeshStandardMaterial({ map: t, roughness: 0.9, side: THREE.DoubleSide }));
     m.rotation.x = -Math.PI / 2; m.rotation.z = ang + Math.PI; m.position.set((a.x + b.x) / 2, 0.02, (a.z + b.z) / 2); m.receiveShadow = true; root.add(m);
   }
   // round joints at bends so the road has no gaps
@@ -104,7 +104,7 @@ export function buildInterstate(scene, { number = 95, name = 'Vice Bay', points,
     // farm fields on long rural segments
     if (scenery && s.len > 300) for (const sd of [-1, 1]) {
       const p = at(s, s.len / 2, sd * (W / 2 + 70));
-      const f = new THREE.Mesh(new THREE.PlaneGeometry(90, s.len * 0.6), mat(sd > 0 ? 0xd9c36a : 0x6fae4a)); f.rotation.x = -Math.PI / 2; f.rotation.z = s.ang; f.position.set(p.x, 0.008, p.z); f.receiveShadow = true; root.add(f);
+      const f = new THREE.Mesh(new THREE.PlaneGeometry(90, s.len * 0.6), new THREE.MeshStandardMaterial({ color: sd > 0 ? 0xd9c36a : 0x6fae4a, side: THREE.DoubleSide })); f.rotation.x = -Math.PI / 2; f.rotation.z = s.ang; f.position.set(p.x, 0.008, p.z); f.receiveShadow = true; root.add(f);
       const barn = box(10, 7, 14, 0xa4161a, p.x + 20 * sd, 3.5, p.z); barn.rotation.y = s.ang; root.add(barn); addCol(barn.position.x, barn.position.z, 12, 12);
     }
   });
