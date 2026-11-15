@@ -377,6 +377,9 @@ HWS.push(
   buildInterstate(scene, { number: 28, name: 'Pelican Bay South', points: [[-2300, -3977], [-2650, -4140], [-3000, -4300]], addCol, startMile: 470 }),
   buildInterstate(scene, { number: 18, name: 'Coral Springs', points: [[-3300, -423], [-3250, -310], [-3200, -200]], addCol, startMile: 490 }),
   buildInterstate(scene, { number: 32, name: 'Coral Springs South', points: [[-3300, -1077], [-3450, -1340], [-3600, -1600]], addCol, startMile: 500 }),
+  buildInterstate(scene, { number: 34, name: 'Gulf Prairie', points: [[-5382.8, -2600.0], [-4600.0, -5220.0]], addCol, startMile: 520 }),
+  buildInterstate(scene, { number: 36, name: 'Harbor Cutoff', points: [[-7000.0, -1120.0], [-4550.0, -1650.0]], addCol, startMile: 540 }),
+  buildInterstate(scene, { number: 38, name: 'North Shore', points: [[-835.0, 5139.6], [-3750.0, 4962.4]], addCol, startMile: 560 }),
 );
 // keep farm barns out from under flyovers (one used to block the SR-70 underpass on I-95)
 for (const [cx, cz, r] of [[-150, 1450, 140], [100, -3950, 300], [-150, 15600, 300], [100, -18600, 300], [-20300, -8100, 300], [-31800, 6800, 300], [...wp(-150, 2500), 300], [...wp(100, -2550), 300], [...wp(-4700, 0), 300], [...wp(-7000, -1000), 300], [...wp(-4700, 1900), 300], [...wp(-7000, 2100), 300]]) {
