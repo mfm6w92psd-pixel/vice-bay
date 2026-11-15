@@ -334,7 +334,7 @@ for (const [cx, cz, r] of [[-150, 1450, 140], [-150, 2500, 140], [100, -2550, 14
   for (const h of HWS) for (const c of [...h.root.children]) if (c.isMesh && c.geometry?.type === 'BoxGeometry' && c.material?.color?.getHex() === 0xa4161a && Math.hypot(c.position.x - cx, c.position.z - cz) < r) h.root.remove(c);
   for (let k = colliders.length - 1; k >= 0; k--) { const c = colliders[k]; if (Math.abs(c.maxX - c.minX - 12) < 0.01 && Math.abs(c.maxZ - c.minZ - 12) < 0.01 && Math.hypot((c.minX + c.maxX) / 2 - cx, (c.minZ + c.maxZ) / 2 - cz) < r) colliders.splice(k, 1); }
 }
-const inHw = (x, z) => CITIES.some(c => c.inside(x, z)) || inRect(SWAMP, x, z) || inRect(DT, x, z) || LINKS.some(r => inRect(r, x, z)) || inRect(AIR, x, z) || inRect(TOWN, x, z) || HWS.some(h => h.nearest(x, z).dist < h.width / 2 + 2) || (ic && ic.inZone(x, z)) || (ex && ex.onDeck(x, z));
+const inHw = (x, z) => CITIES.some(c => c.inside(x, z)) || inRect(SWAMP, x, z) || inRect(DT, x, z) || LINKS.some(r => inRect(r, x, z)) || inRect(AIR, x, z) || inRect(TOWN, x, z) || HWS.some(h => { const n = h.nearest(x, z); return n.dist < h.width / 2 + 2 || (n.dist < h.width * 1.5 && (n.t < 0.5 || n.t > h.segs[n.segIndex].len - 0.5)); }) || (ic && ic.inZone(x, z)) || (ex && ex.onDeck(x, z));
 const isLanes = [{ z: IS.z + 3.2, dir: 1 }, { z: IS.z + 9, dir: 1 }, { z: IS.z - 3.2, dir: -1 }, { z: IS.z - 9, dir: -1 }];
 // ---------- traffic lights at every grid crossing ----------
 const tl = new TrafficLights(scene);
