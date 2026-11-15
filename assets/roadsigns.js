@@ -48,6 +48,40 @@ function welcomeSign(name) {
   return panel(t, 4, 2, 2.6);
 }
 
+// route shield + direction tab, e.g. [I-36 shield] over "WEST"
+function shieldSign(num, us, dir) {
+  const t = tex(`r:${us ? 'U' : 'I'}${num}:${dir}`, 128, 176, (x, w, h) => {
+    x.clearRect(0, 0, w, h);
+    x.fillStyle = '#fff'; x.fillRect(4, 132, w - 8, 40); x.strokeStyle = '#111'; x.lineWidth = 3; x.strokeRect(5.5, 133.5, w - 11, 37);
+    x.fillStyle = '#111'; x.font = 'bold 26px sans-serif'; x.textAlign = 'center'; x.fillText(dir, w / 2, 162);
+    x.beginPath();
+    if (us) { x.moveTo(14, 10); x.lineTo(w - 14, 10); x.quadraticCurveTo(w - 4, 70, w / 2 + 30, 104); x.lineTo(w / 2, 124); x.lineTo(w / 2 - 30, 104); x.quadraticCurveTo(4, 70, 14, 10); x.closePath();
+      x.fillStyle = '#fff'; x.fill(); x.lineWidth = 5; x.strokeStyle = '#111'; x.stroke(); x.fillStyle = '#111'; x.font = `bold ${String(num).length > 2 ? 40 : 52}px sans-serif`; x.fillText(String(num), w / 2, 84); }
+    else { x.moveTo(10, 14); x.quadraticCurveTo(w / 2, 2, w - 10, 14); x.lineTo(w - 8, 70); x.quadraticCurveTo(w - 12, 112, w / 2, 126); x.quadraticCurveTo(12, 112, 8, 70); x.closePath();
+      x.fillStyle = '#fff'; x.fill(); x.save(); x.clip(); x.fillStyle = '#c8102e'; x.fillRect(0, 0, w, 40); x.fillStyle = '#003f87'; x.fillRect(0, 44, w, h); x.restore();
+      x.fillStyle = '#fff'; x.font = 'bold 13px sans-serif'; x.fillText('INTERSTATE', w / 2, 33); x.font = `bold ${String(num).length > 2 ? 38 : 50}px sans-serif`; x.fillText(String(num), w / 2, 102); }
+  });
+  const g = new THREE.Group();
+  const f = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 2.06), new THREE.MeshBasicMaterial({ map: t, transparent: true, alphaTest: 0.5 })); f.position.y = 2.6; g.add(f);
+  const p = new THREE.Mesh(new THREE.BoxGeometry(0.12, 2.6, 0.12), postMat); p.position.set(0, 1.3, -0.06); g.add(p);
+  return g;
+}
+// yellow diamond curve warning with an arrow bending left or right
+function curveSign(right) {
+  const t = tex('c:' + (right ? 'R' : 'L'), 128, 128, (x, w, h) => {
+    x.clearRect(0, 0, w, h); x.save(); x.translate(w / 2, h / 2); x.rotate(Math.PI / 4);
+    x.fillStyle = '#ffcc00'; x.fillRect(-42, -42, 84, 84); x.strokeStyle = '#111'; x.lineWidth = 4; x.strokeRect(-38, -38, 76, 76); x.restore();
+    x.save(); x.translate(w / 2, h / 2); if (!right) x.scale(-1, 1);
+    x.strokeStyle = '#111'; x.lineWidth = 9; x.lineCap = 'round'; x.beginPath(); x.moveTo(-6, 34); x.lineTo(-6, 4); x.quadraticCurveTo(-6, -16, 14, -16); x.stroke();
+    x.fillStyle = '#111'; x.beginPath(); x.moveTo(30, -16); x.lineTo(10, -32); x.lineTo(10, 0); x.closePath(); x.fill(); x.restore();
+  });
+  const g = new THREE.Group();
+  const f = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 1.7), new THREE.MeshBasicMaterial({ map: t, transparent: true, alphaTest: 0.5 })); f.position.y = 2.5; g.add(f);
+  const p = new THREE.Mesh(new THREE.BoxGeometry(0.12, 2.5, 0.12), postMat); p.position.set(0, 1.25, -0.06); g.add(p);
+  return g;
+}
+const CARD = (dx, dz) => Math.abs(dx) > Math.abs(dz) ? (dx > 0 ? 'EAST' : 'WEST') : (dz < 0 ? 'NORTH' : 'SOUTH');
+
 export function buildRoadSigns(scene, { highways, places = [], cityRadius = 450 } = {}) {
   const root = new THREE.Group(); root.name = 'roadsigns'; scene.add(root);
   const near = (p, r = cityRadius) => { let best = null, bd = r; for (const c of places) { const d = Math.hypot(c.x - p.x, c.z - p.z); if (d < bd) { bd = d; best = c; } } return best; };
@@ -78,6 +112,20 @@ export function buildRoadSigns(scene, { highways, places = [], cityRadius = 450 
         if (behind.length) put(distanceSign(behind.slice(0, 2)), at(s, bd, side), s.ang);
         put(speedSign(limit), at(s, s.len * 0.5, -side), s.ang + Math.PI);
         put(speedSign(limit), at(s, s.len * 0.5 + 20, side), s.ang);
+        // route shields: forward traffic and reverse traffic each get "I-36 WEST"-style markers
+        if (h.number != null) {
+          put(shieldSign(h.number, h.us, CARD(s.dir.x, s.dir.z)), at(s, 190, -side), s.ang + Math.PI);
+          put(shieldSign(h.number, h.us, CARD(-s.dir.x, -s.dir.z)), at(s, s.len - 190, side), s.ang);
+        }
+      }
+      // curve warning before a sharp bend into the next segment (both directions)
+      const n = segs[i + 1];
+      if (n && s.len > 220 && n.len > 220) {
+        const turn = s.dir.x * n.dir.z - s.dir.z * n.dir.x, ang = Math.acos(Math.max(-1, Math.min(1, s.dir.dot(n.dir))));
+        if (ang > 0.35) {
+          put(curveSign(turn > 0), at(s, s.len - 150, -side), s.ang + Math.PI);
+          put(curveSign(turn < 0), at(n, 150, side), n.ang);
+        }
       }
       acc += s.len;
     });
