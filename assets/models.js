@@ -86,19 +86,30 @@ export function animatePerson(p, speed, dt) {
 
 // Miami-style pastel buildings with window strips.
 const PASTEL = [0xffc8dd, 0xbde0fe, 0xfff1c1, 0xcaffbf, 0xffd6a5, 0xe4c1f9, 0xf5f5f5, 0x9bf6ff];
-let winTex;
+let winTex, winRough;
 function windowTexture() {
   if (winTex) return winTex;
-  const c = document.createElement('canvas'); c.width = 64; c.height = 128; const x = c.getContext('2d');
-  x.fillStyle = '#fff'; x.fillRect(0, 0, 64, 128);
-  for (let r = 0; r < 8; r++) for (let k = 0; k < 4; k++) { x.fillStyle = Math.random() < 0.25 ? '#ffe9a0' : '#5a7a99'; x.fillRect(4 + k * 15, 4 + r * 16, 10, 10); }
-  winTex = new THREE.CanvasTexture(c); winTex.wrapS = winTex.wrapT = THREE.RepeatWrapping; winTex.colorSpace = THREE.SRGBColorSpace;
+  const S = 256, c = document.createElement('canvas'); c.width = S; c.height = S * 2; const x = c.getContext('2d');
+  const r = document.createElement('canvas'); r.width = S; r.height = S * 2; const rx = r.getContext('2d');
+  x.fillStyle = '#fff'; x.fillRect(0, 0, S, S * 2); rx.fillStyle = '#00e600'; rx.fillRect(0, 0, S, S * 2); // walls: rough, not metal (G=rough, B=metal)
+  for (let i = 0; i < 4000; i++) { const v = 235 + Math.random() * 20; x.fillStyle = `rgb(${v},${v},${v})`; x.fillRect(Math.random() * S, Math.random() * S * 2, 2, 2); } // plaster grain
+  for (let row = 0; row < 8; row++) for (let k = 0; k < 4; k++) {
+    const X = 16 + k * 60, Y = 16 + row * 64, lit = Math.random() < 0.25;
+    x.fillStyle = '#d0d0d0'; x.fillRect(X - 3, Y - 3, 46, 46); // frame
+    const gr = x.createLinearGradient(X, Y, X + 40, Y + 40); gr.addColorStop(0, lit ? '#fff2b8' : '#7f9fbf'); gr.addColorStop(1, lit ? '#ffd56a' : '#2c4560');
+    x.fillStyle = gr; x.fillRect(X, Y, 40, 40); x.fillStyle = 'rgba(255,255,255,0.18)'; x.fillRect(X, Y, 40, 6);
+    x.fillStyle = '#c8c8c8'; x.fillRect(X - 4, Y + 42, 48, 4); // sill
+    rx.fillStyle = lit ? '#004000' : '#0a1a80'; rx.fillRect(X, Y, 40, 40); // glass: smooth + a bit metallic so it reflects the sky
+  }
+  winTex = new THREE.CanvasTexture(c); winTex.wrapS = winTex.wrapT = THREE.RepeatWrapping; winTex.colorSpace = THREE.SRGBColorSpace; winTex.anisotropy = 4;
+  winRough = new THREE.CanvasTexture(r); winRough.wrapS = winRough.wrapT = THREE.RepeatWrapping;
   return winTex;
 }
 export function makeBuilding(w = 12, h = 20, d = 12, color = pick(PASTEL)) {
   const g = new THREE.Group();
   const t = windowTexture().clone(); t.needsUpdate = true; t.repeat.set(Math.max(1, Math.round(w / 6)), Math.max(1, Math.round(h / 12)));
-  const side = new THREE.MeshStandardMaterial({ color, map: t, roughness: 0.8 });
+  const rt = winRough.clone(); rt.needsUpdate = true; rt.repeat.copy(t.repeat);
+  const side = new THREE.MeshStandardMaterial({ color, map: t, roughnessMap: rt, metalnessMap: rt, roughness: 1, metalness: 1 }); side.userData.facade = true;
   const roof = mat(0xd9d9d9);
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), [side, side, roof, roof, side, side]);
   m.position.y = h / 2; m.castShadow = m.receiveShadow = true; g.add(m);
@@ -127,16 +138,20 @@ export function makeStreetLight() {
 }
 
 // Road tile (size x size) with lane markings; lay on y=0.01.
-let roadTex;
+let roadTex, roadMat;
 export function makeRoad(size = 20, horizontal = true) {
   if (!roadTex) {
-    const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d');
-    x.fillStyle = '#3a3a40'; x.fillRect(0, 0, 128, 128);
-    x.fillStyle = '#f5d142'; for (let i = 0; i < 128; i += 32) x.fillRect(62, i, 4, 18);
-    x.fillStyle = '#ddd'; x.fillRect(4, 0, 3, 128); x.fillRect(121, 0, 3, 128);
-    roadTex = new THREE.CanvasTexture(c); roadTex.colorSpace = THREE.SRGBColorSpace;
+    const S = 256, c = document.createElement('canvas'); c.width = c.height = S; const x = c.getContext('2d');
+    x.fillStyle = '#3a3a40'; x.fillRect(0, 0, S, S);
+    for (let i = 0; i < 9000; i++) { const v = 40 + Math.random() * 40; x.fillStyle = `rgb(${v},${v},${v + 4})`; x.fillRect(Math.random() * S, Math.random() * S, 1.5, 1.5); } // aggregate
+    for (let i = 0; i < 6; i++) { x.fillStyle = 'rgba(20,20,22,0.25)'; x.beginPath(); x.ellipse(Math.random() * S, Math.random() * S, 10 + Math.random() * 25, 6 + Math.random() * 12, Math.random() * 3, 0, 7); x.fill(); } // patches/oil
+    x.fillStyle = 'rgba(0,0,0,0.18)'; x.fillRect(S * 0.2, 0, S * 0.12, S); x.fillRect(S * 0.68, 0, S * 0.12, S); // tire tracks
+    x.fillStyle = '#f2cf45'; for (let i = 0; i < S; i += 64) x.fillRect(S / 2 - 4, i + 4, 8, 36);
+    x.fillStyle = '#e6e6e6'; x.fillRect(8, 0, 6, S); x.fillRect(S - 14, 0, 6, S);
+    roadTex = new THREE.CanvasTexture(c); roadTex.colorSpace = THREE.SRGBColorSpace; roadTex.anisotropy = 8;
+    roadMat = new THREE.MeshStandardMaterial({ map: roadTex, roughness: 0.85 }); roadMat.userData.road = true;
   }
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(size, size), new THREE.MeshStandardMaterial({ map: roadTex, roughness: 0.9 }));
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(size, size), roadMat);
   m.rotation.x = -Math.PI / 2; if (horizontal) m.rotation.z = Math.PI / 2; m.position.y = 0.01; m.receiveShadow = true; return m;
 }
 

@@ -10,12 +10,20 @@ import { buildInterstate } from './assets/interstates.js';
 import { buildAirport, buildSmallTown, makeJet } from './assets/districts.js';
 import { buildSwamp, buildDowntown, makeAirboat } from './assets/regions.js';
 import { buildCity } from './assets/cities.js';
+import { setupGraphics } from './assets/graphics.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
 
 const $ = id => document.getElementById(id);
 const audio = new GameAudio();
 const SAVE_KEY = 'vicebay_save_v1', SET_KEY = 'vicebay_settings_v1';
 const settings = Object.assign({ quality: 'medium', volume: 0.6, radio: true, station: 0, rain: 'auto', leftHanded: false, btnScale: 1, sens: 1 },
   JSON.parse(localStorage.getItem(SET_KEY) || '{}'));
+if (!settings.ultraV1) { settings.quality = 'ultra'; settings.ultraV1 = true; try { localStorage.setItem(SET_KEY, JSON.stringify(settings)); } catch (e) {} }
 const saveSettings = () => localStorage.setItem(SET_KEY, JSON.stringify(settings));
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const rand = (a, b) => a + Math.random() * (b - a);
@@ -37,20 +45,37 @@ const hemi = new THREE.HemisphereLight(0xffffff, 0x445566, 1.1); scene.add(hemi)
 const sun = new THREE.DirectionalLight(0xffe0c0, 2); sun.castShadow = true;
 sun.shadow.mapSize.set(1024, 1024); Object.assign(sun.shadow.camera, { left: -45, right: 45, top: 45, bottom: -45, near: 1, far: 160 });
 scene.add(sun, sun.target);
+// ---------- ULTRA graphics: physical sky, sky reflections, bloom, ACES color, soft shadows, FXAA ----------
+// ---------- graphics: Mika's sky/reflections/materials (assets/graphics.js) + ULTRA bloom & FXAA ----------
+let gfx = null;
+const ULTRA = { on: false, composer: null, bloom: null, fxaa: null };
+function ultraSetup() {
+  if (ULTRA.composer) return;
+  const c = new EffectComposer(renderer); c.addPass(new RenderPass(scene, camera));
+  ULTRA.bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.3, 0.45, 0.9); c.addPass(ULTRA.bloom);
+  c.addPass(new OutputPass()); ULTRA.fxaa = new ShaderPass(FXAAShader); c.addPass(ULTRA.fxaa); ULTRA.composer = c;
+}
+function drawFrame() { if (ULTRA.on && ULTRA.composer) ULTRA.composer.render(); else renderer.render(scene, camera); }
 function applyQuality() {
-  const q = settings.quality;
-  renderer.setPixelRatio(Math.min(devicePixelRatio, q === 'low' ? 1 : q === 'medium' ? 1.5 : 2));
+  const q = settings.quality, ultra = q === 'ultra', wasUltra = ULTRA.on;
+  if (ultra) ultraSetup(); ULTRA.on = ultra;
+  renderer.shadowMap.type = (ultra || q === 'high') ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+  sun.shadow.bias = ultra ? -0.0004 : 0; sun.shadow.normalBias = ultra ? 0.03 : 0;
+  Object.assign(sun.shadow.camera, ultra ? { left: -70, right: 70, top: 70, bottom: -70, far: 220 } : { left: -45, right: 45, top: 45, bottom: -45, far: 160 }); sun.shadow.camera.updateProjectionMatrix();
+  if (wasUltra !== ultra) { renderer.shadowMap.needsUpdate = true; scene.traverse(o => { if (o.material) [].concat(o.material).forEach(m => m.needsUpdate = true); }); }
+  renderer.setPixelRatio(Math.min(devicePixelRatio, q === 'low' ? 1 : q === 'medium' ? 1.5 : q === 'ultra' ? 1.75 : 2));
   const sh = q !== 'low';
   if (renderer.shadowMap.enabled !== sh) { renderer.shadowMap.enabled = sh; scene.traverse(o => { if (o.material) [].concat(o.material).forEach(m => m.needsUpdate = true); }); }
-  sun.castShadow = sh; sun.shadow.mapSize.set(q === 'high' ? 2048 : 1024, q === 'high' ? 2048 : 1024);
+  sun.castShadow = sh; sun.shadow.mapSize.setScalar(q === 'ultra' ? 4096 : q === 'high' ? 2048 : 1024);
   if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
-  camera.far = q === 'low' ? 200 : q === 'medium' ? 300 : 420; camera.updateProjectionMatrix();
-  baseFogFar = q === 'low' ? 150 : q === 'medium' ? 230 : 330;
+  camera.far = q === 'low' ? 200 : q === 'medium' ? 300 : 420; if (gfx) gfx.sky.scale.setScalar(Math.max(100, camera.far * 0.9)); camera.updateProjectionMatrix();
+  baseFogFar = q === 'low' ? 150 : q === 'medium' ? 230 : q === 'ultra' ? 400 : 380;
   resize();
 }
 let baseFogFar = 230;
 function resize() {
   renderer.setSize(innerWidth, innerHeight, false);
+  if (ULTRA.composer) { ULTRA.composer.setPixelRatio(renderer.getPixelRatio()); ULTRA.composer.setSize(innerWidth, innerHeight); const pr = renderer.getPixelRatio(); ULTRA.fxaa.material.uniforms.resolution.value.set(1 / (innerWidth * pr), 1 / (innerHeight * pr)); ULTRA.bloom.setSize(innerWidth / 2, innerHeight / 2); }
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
   $('rotate').classList.toggle('need', innerHeight > innerWidth);
 }
@@ -1003,6 +1028,7 @@ const RAIN_N = 1200, rainGeo = new THREE.BufferGeometry(), rainPos = new Float32
 for (let i = 0; i < RAIN_N; i++) { rainPos[i * 3] = rand(-40, 40); rainPos[i * 3 + 1] = rand(0, 30); rainPos[i * 3 + 2] = rand(-40, 40); }
 rainGeo.setAttribute('position', new THREE.BufferAttribute(rainPos, 3));
 const rain = new THREE.Points(rainGeo, new THREE.PointsMaterial({ color: 0xaaccff, size: 0.12, transparent: true, opacity: 0.6, depthWrite: false })); rain.visible = false; rain.frustumCulled = false; scene.add(rain);
+let gfxT = 0;
 function updateEnv(dt) {
   state.time = (state.time + dt / 720) % 1; // 12 real minutes per day
   const t = state.time, sunUp = clamp(Math.sin((t - 0.25) / 0.5 * Math.PI), 0, 1);
@@ -1016,6 +1042,12 @@ function updateEnv(dt) {
   sun.intensity = (0.1 + 2.1 * sunUp) * (1 - w * 0.6); hemi.intensity = (0.45 + 0.65 * sunUp) * (1 - w * 0.3) + flash * 3; flash = Math.max(0, flash - dt * 3);
   const ang = (t - 0.25) * Math.PI * 2, px = player.car ? player.car.x : player.x, pz = player.car ? player.car.z : player.z;
   sun.position.set(px + Math.cos(ang) * 60, Math.max(15, Math.sin(ang) * 80), pz + 30); sun.target.position.set(px, 0, pz);
+  if (gfx) {
+    hemi.intensity *= 0.55;
+    gfx.update(dt, { sunDir: new THREE.Vector3(Math.cos(ang), Math.sin(ang), 0.45), skyColor: sky, fogColor: sky, wet: w, night: 1 - sunUp });
+    gfxT -= dt; if (gfxT <= 0) { gfxT = 2; for (const v of vehicles) if (v.mesh && !v.mesh.userData.gfxDone) { gfx.upgrade(v.mesh); v.mesh.userData.gfxDone = true; } }
+  }
+  if (ULTRA.on) { ULTRA.bloom.strength = 0.12 + (1 - sunUp) * 0.6; ULTRA.bloom.threshold = 1.0 - (1 - sunUp) * 0.3; }
   const night = 1 - sunUp;
   if (streetLights[0]) streetLights[0].userData.bulb.material.emissiveIntensity = 0.2 + night * 2.5;
   // wet roads
@@ -1195,7 +1227,7 @@ let last = performance.now();
 function frame(nowMs) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, (nowMs - last) / 1000); last = nowMs;
-  if (state.paused || !state.started) { renderer.render(scene, camera); return; }
+  if (state.paused || !state.started) { drawFrame(); return; }
   state.now += dt; readInput();
   state.fixedT = (state.fixedT || 0) - dt; if (state.fixedT <= 0) { state.fixedT = 15; ensureFixed(); }
   if (cutLines) { cutT -= dt; if (cutT <= 0 || input.enterP) nextLine(); input.enterP = false; input.mx = input.my = 0; input.shoot = input.jump = false; }
@@ -1243,7 +1275,7 @@ function frame(nowMs) {
   if (msgTimer > 0) { msgTimer -= dt; if (msgTimer <= 0) $('msg').classList.remove('show'); }
   if (bigTimer > 0) { bigTimer -= dt; if (bigTimer <= 0) $('big').classList.remove('show'); }
   if (state.now - lastHud > 0.1) { lastHud = state.now; updateHud(); drawMinimap(); }
-  renderer.render(scene, camera);
+  drawFrame();
 }
 
 // ---------- menus ----------
@@ -1297,6 +1329,7 @@ for (let i = 0; i < 16; i++) spawnTraffic(null);
 for (let i = 0; i < 24; i++) spawnPed();
 player.x = POI.safe.x; player.z = POI.safe.z - 1;
 refreshMissionMarkers(); applyQuality(); applyControls();
+gfx = setupGraphics(renderer, scene, camera, { quality: settings.quality === 'ultra' ? 'high' : settings.quality }); gfx.upgrade(scene); applyQuality();
 camera.position.set(player.x + 30, 40, player.z + 50); camera.lookAt(player.x, 0, player.z);
 window.__game = { state, player, vehicles, peds, settings, enterCar, exitCar, addWanted, MISSIONS, startMission, POI, HWS };
 requestAnimationFrame(frame);

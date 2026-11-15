@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Vice Bay">
 <title>Vice Bay</title>
-<script type="importmap">{"imports":{"three":"./vendor/three.module.js"}}</script>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js","three/addons/":"./vendor/addons/"}}</script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -70,7 +70,7 @@
 
 <div id="settings" class="screen hidden">
   <h2>Settings</h2>
-  <div class="row"><label>Graphics</label><select id="setQuality"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></div>
+  <div class="row"><label>Graphics</label><select id="setQuality"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="ultra">Ultra ✨</option></select></div>
   <div class="row"><label>Volume</label><input id="setVolume" type="range" min="0" max="1" step="0.05"></div>
   <div class="row"><label>Radio</label><select id="setRadio"><option value="1">On</option><option value="0">Off</option></select></div>
   <div class="row"><label>Weather</label><select id="setRain"><option value="auto">Dynamic</option><option value="clear">Always clear</option><option value="rain">Always rain</option></select></div>
