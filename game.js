@@ -397,7 +397,8 @@ resolveProperties(POI);
 for (const pr of PROPERTIES) { const m = M.makeMarker(pr.owned ? 0x3ddc84 : 0xffcf3c); m.position.set(pr.x, 1.5, pr.z); m.scale.set(1.6, 0.7, 1.6); scene.add(m); pr.mesh = m; pr._own = pr.owned; }
 // New Bot 1's teleport menu: every target is nudged to the nearest open ground so the car never lands inside a building
 function tpSafe(x, z) {
-  const free = (px, pz) => !inWater(px, pz) && !colliders.some(c => px > c.minX - 4 && px < c.maxX + 4 && pz > c.minZ - 4 && pz < c.maxZ + 4);
+  const marks = [...PROPERTIES, ...SHOPS, ...Object.values(POI)].filter(m => m && m.x !== undefined);
+  const free = (px, pz) => !inWater(px, pz) && !colliders.some(c => px > c.minX - 4 && px < c.maxX + 4 && pz > c.minZ - 4 && pz < c.maxZ + 4) && !marks.some(m => Math.hypot(m.x - px, m.z - pz) < 16);
   if (free(x, z)) return [x, z];
   for (let r = 4; r <= 160; r += 4) for (let a = 0; a < 16; a++) { const px = x + Math.cos(a * Math.PI / 8) * r, pz = z + Math.sin(a * Math.PI / 8) * r; if (free(px, pz)) return [px, pz]; }
   return [x, z];
@@ -411,6 +412,7 @@ const tp = buildTeleport({
   getOwned: () => PROPERTIES.filter(p => p.owned && p.x !== undefined).map(p => ({ name: p.name, x: p.x, z: p.z, icon: p.icon || '⌂' })),
   getPos: () => ({ x: player.x, z: player.z }),
   showMsg, buttonStyle: 'top:10px;left:212px;',
+  canShow: () => !document.querySelector('.screen:not(.hidden):not(#rotate)') && !document.getElementById('propUI'),
 });
 const poiMarkers = {};
 for (const [id, p] of Object.entries(POI)) {
