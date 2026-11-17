@@ -384,6 +384,11 @@ HWS.push(
   // New Bot: Cedar Key, a new city in the north-west, reached from US-1 (I-42) and I-34 (I-44)
   buildInterstate(scene, { number: 42, name: 'Cedar Key', points: [[-5840, -4973.3], [-5840, -4267]], addCol, startMile: 580 }),
   buildInterstate(scene, { number: 44, name: 'Cedar Run', points: [[-5513, -3940], [-4982.6, -3940]], addCol, startMile: 600 }),
+  // New Bot: four more interstates through open country
+  buildInterstate(scene, { number: 46, name: 'Sawgrass', points: [[-5340, -2600], [-3700, -5240]], addCol, startMile: 620 }),
+  buildInterstate(scene, { number: 48, name: 'Cypress Valley', points: [[-1099, -2550], [-1092.8, -4700]], addCol, startMile: 650 }),
+  buildInterstate(scene, { number: 52, name: 'Sunset Trail', points: [[-6125, 4925], [-4250, 4537.6]], addCol, startMile: 670 }),
+  buildInterstate(scene, { number: 54, name: 'Prairie Link', points: [[-2100, -2690], [-3200, -1450]], addCol, startMile: 690 }),
 );
 // keep farm barns out from under flyovers (one used to block the SR-70 underpass on I-95)
 for (const [cx, cz, r] of [[-150, 1450, 140], [100, -3950, 300], [-150, 15600, 300], [100, -18600, 300], [-20300, -8100, 300], [-31800, 6800, 300], [...wp(-150, 2500), 300], [...wp(100, -2550), 300], [...wp(-4700, 0), 300], [...wp(-7000, -1000), 300], [...wp(-4700, 1900), 300], [...wp(-7000, 2100), 300]]) {
