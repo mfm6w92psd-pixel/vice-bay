@@ -120,6 +120,16 @@ function signpost(arms) {   // arms: [{ name, mi, ang }]  ang = direction in rad
 }
 const CARD = (dx, dz) => Math.abs(dx) > Math.abs(dz) ? (dx > 0 ? 'EAST' : 'WEST') : (dz < 0 ? 'NORTH' : 'SOUTH');
 
+// blue motorist-services signs: "GAS · FOOD · LODGING  NEXT EXIT" and "REST AREA 1 MILE"
+function serviceSign(kind) {
+  const t = tex('sv:' + kind, 256, 160, (x, w, h) => {
+    x.fillStyle = '#1d4fa3'; x.fillRect(0, 0, w, h); x.strokeStyle = '#fff'; x.lineWidth = 4; x.strokeRect(6, 6, w - 12, h - 12);
+    x.fillStyle = '#fff'; x.textAlign = 'center';
+    if (kind === 'rest') { x.font = 'bold 40px sans-serif'; x.fillText('REST', w / 2, 58); x.fillText('AREA', w / 2, 100); x.font = 'bold 24px sans-serif'; x.fillText('1 MILE', w / 2, 140); }
+    else { x.font = 'bold 30px sans-serif'; x.fillText('GAS', w / 2, 44); x.fillText('FOOD', w / 2, 80); x.fillText('LODGING', w / 2, 116); x.font = 'bold 20px sans-serif'; x.fillText('NEXT EXIT', w / 2, 146); }
+  });
+  return panel(t, 3.2, 2, 3);
+}
 export function buildRoadSigns(scene, { highways, places = [], cityRadius = 450 } = {}) {
   const root = new THREE.Group(); root.name = 'roadsigns'; scene.add(root);
   const near = (p, r = cityRadius) => { let best = null, bd = r; for (const c of places) { const d = Math.hypot(c.x - p.x, c.z - p.z); if (d < bd) { bd = d; best = c; } } return best; };
@@ -169,6 +179,20 @@ export function buildRoadSigns(scene, { highways, places = [], cityRadius = 450 
       }
       acc += s.len;
     });
+    // motorist services: blue signs 3 miles before each city the highway passes, both directions,
+    // and REST AREA signs every ~12 miles out in the open country (kept away from cities)
+    const segAt = pos => { let a = 0; for (const s of segs) { if (pos <= a + s.len) return [s, pos - a]; a += s.len; } return null; };
+    const putAt = (pos, fwd, obj) => { const r = segAt(pos); if (!r) return; const [s, d] = r; put(obj, at(s, d, fwd ? -side - 1 : side + 1), s.ang + (fwd ? Math.PI : 0)); };
+    for (const o of along) {
+      if (/airport/i.test(o.c.name)) continue;
+      if (o.pos - 480 > 60) putAt(o.pos - 480, true, serviceSign('svc'));
+      if (o.pos + 480 < total - 60) putAt(o.pos + 480, false, serviceSign('svc'));
+    }
+    for (let p = 1920; p < total - 400; p += 1920) {
+      const r = segAt(p); if (!r) continue; const q = at(r[0], r[1], 0);
+      if (places.some(c => Math.hypot(c.x - q.x, c.z - q.z) < cityRadius + 500)) continue;
+      putAt(p, true, serviceSign('rest')); putAt(p + 60, false, serviceSign('rest'));
+    }
     // welcome signs just before each end that lands in a city
     const last = segs[segs.length - 1], first = segs[0], ce = near(end), cs = near(start);
     if (ce && last.len > 120) put(welcomeSign(ce.name), at(last, last.len - 70, -side), last.ang + Math.PI);
