@@ -8,12 +8,14 @@
 //   AI cars keep using surfaceY directly.  stunts.spots -> [{ x, z, name }] for minimap dots.
 import * as THREE from 'three';
 import { mat } from './models.js';
+import { buildMountain } from './mountain.js';
 
 const L = 16, W = 8, HMAX = 3.4;    // ramp length, width, lip height
 export const STUNT_SPOTS = [
   { name: 'Runway 09L Jump', x: -2000, z: -321, h: -Math.PI / 2 },   // heads east along 09L
   { name: 'Runway 09R Jump', x: -1930, z: -101, h: Math.PI / 2 },    // heads west along 09R
   { name: 'Beach Jump', x: 211, z: -30, h: 0 },                      // heads north along the sand
+  { name: 'Mount Kestrel', x: -1050, z: -1350, mountain: true },      // Mika: 300 m mountain + summit road (mountain.js), open land between Vice Bay and Pelican Bay
 ];
 function chevronTex() {
   const c = document.createElement('canvas'); c.width = 128; c.height = 256; const g = c.getContext('2d');
@@ -31,7 +33,8 @@ export function buildStuntJumps(scene, { spots = STUNT_SPOTS, addCol = () => {} 
   const root = new THREE.Group(); scene.add(root);
   const tex = chevronTex(), deck = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.7 }), side = mat(0x555a66), sign = new THREE.MeshBasicMaterial({ map: signTex('STUNT JUMP') });
   const done = new Set();
-  const R = spots.map(s => {
+  const MT = spots.filter(s => s.mountain).map(s => buildMountain(root, s));
+  const R = spots.filter(s => !s.mountain).map(s => {
     const g = new THREE.Group(); g.position.set(s.x, 0, s.z); g.rotation.y = s.h; root.add(g);
     // wedge: local -Z is forward (same as cars). Starts at z=+L/2 (ground), lip at z=-L/2 (HMAX high)
     const shape = new THREE.Shape(); shape.moveTo(-L / 2, 0); shape.lineTo(L / 2, 0); shape.lineTo(L / 2, HMAX); shape.lineTo(L / 2 - 0.4, HMAX); shape.closePath();
@@ -50,11 +53,12 @@ export function buildStuntJumps(scene, { spots = STUNT_SPOTS, addCol = () => {} 
   const tmp = new THREE.Vector3();
   const local = (r, x, z) => tmp.set(x, 0, z).applyMatrix4(r.inv);
   const rampAt = (x, z) => { for (const r of R) { if (Math.abs(x - r.x) > L && Math.abs(z - r.z) > L) continue; const p = local(r, x, z); if (Math.abs(p.x) <= W / 2 && p.z <= L / 2 && p.z >= -L / 2) return { r, h: HMAX * (L / 2 - p.z) / L }; } return null; };
-  const heightAt = (x, z, y = 0) => { const q = rampAt(x, z); return q && q.h <= y + 1.6 ? q.h : 0; };
+  const heightAt = (x, z, y = 0) => { const q = rampAt(x, z); let h = q && q.h <= y + 1.6 ? q.h : 0; for (const m of MT) h = Math.max(h, m.heightAt(x, z)); return h; };
 
   const G = 20;
   const carY = (v, dt, ground) => {
     v.y = v.y || 0;
+    for (const m of MT) if (!done.has(m.name) && m.onSummit(v.x, v.z)) { done.add(m.name); v.y = ground; return { dist: 0, height: m.topH, time: 0, reward: 1000, first: true, name: m.name, text: `${m.name.toUpperCase()} SUMMIT! +$1000` }; }
     if (!v.air) {
       const q = rampAt(v.x, v.z);
       if (q) { v._rampR = q.r; v._rampVy = Math.max(0, (ground - v.y) / Math.max(dt, 1e-3)); v.y = ground; v.pitch = Math.atan2(HMAX, L) * Math.sign(v.speed || 0); return null; }
@@ -71,5 +75,5 @@ export function buildStuntJumps(scene, { spots = STUNT_SPOTS, addCol = () => {} 
     const reward = Math.round(dist * 3 + a.t * 50 + (first ? 250 : 0));
     return { dist, height: a.top, time: a.t, reward, first, name: a.r.name, text: `${first ? 'UNIQUE ' : ''}STUNT JUMP! ${dist.toFixed(0)} m, ${a.t.toFixed(1)} s  +$${reward}` };
   };
-  return { root, heightAt, carY, spots: R.map(r => ({ x: r.x, z: r.z, name: r.name })), done };
+  return { root, heightAt, carY, spots: [...R.map(r => ({ x: r.x, z: r.z, name: r.name })), ...MT.map(m => ({ x: m.x, z: m.z, name: m.name }))], mountains: MT, done };
 }
