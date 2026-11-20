@@ -1014,9 +1014,15 @@ function die(text, color) {
 // ---------- save / load ----------
 function saveGame(quiet) {
   const px = player.car ? player.car.x : player.x, pz = player.car ? player.car.z : player.z;
-  localStorage.setItem(SAVE_KEY, JSON.stringify({ money: player.money, health: player.health, armor: player.armor, done: state.done, x: px, z: pz, time: state.time, weapon: player.weapon, w5: 1, at: Date.now() }));
-  if (!quiet) showMsg('Game saved'); else showMsg('Progress saved', 1.5);
+  const c = player.car, car = c && (c.kind === 'car' || c.kind === 'sports') && !c.dead ? { sports: !!c.sports, color: c.color, h: c.heading, name: c.name } : null;
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ money: player.money, health: player.health, armor: player.armor, done: state.done, x: px, z: pz, time: state.time, weapon: player.weapon, w5: 1, car, at: Date.now() })); } catch (e) { if (quiet !== 'silent') showMsg('Could not save'); return; }
+  $('btnContinue').style.display = '';
+  if (quiet === 'silent') return; if (!quiet) showMsg('Game saved'); else showMsg('Progress saved', 1.5);
 }
+// New Bot: autosave every minute and whenever Safari hides or closes the tab (skipped during missions, chases and wasted/busted)
+function autoSave() { if (state.started && !state.mission && !state.wanted && !state.dead) saveGame('silent'); }
+setInterval(() => { if (!state.paused) autoSave(); }, 60000);
+addEventListener('pagehide', autoSave); addEventListener('visibilitychange', () => { if (document.hidden) autoSave(); });
 function loadGame() {
   const s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); if (!s) { showMsg('No saved game yet'); return false; }
   if (player.car) exitCar(true); endMission();
@@ -1024,7 +1030,9 @@ function loadGame() {
   if (!s.w5) [player.x, player.z] = wp(s.x, s.z);
   if (insideAny(player.x, player.z, 0.5)) { player.x = POI.safe.x; player.z = POI.safe.z; }
   state.done = s.done || []; state.time = s.time ?? 0.4; state.wanted = 0; vehicles.filter(v => v.type === 'police').forEach(removeVehicle);
-  refreshMissionMarkers(); showMsg('Game loaded'); return true;
+  if (s.car && !insideAny(player.x, player.z, 2.5)) { const v = addVehicle('parked', player.x, player.z, s.car.h || 0, { sports: s.car.sports, color: s.car.color, name: s.car.name }); player.x += 1; enterCar(); if (player.car !== v) { v.type = 'parked'; } }
+  const ago = s.at ? Math.round((Date.now() - s.at) / 60000) : null;
+  refreshMissionMarkers(); showMsg(ago == null ? 'Game loaded' : `Game loaded (saved ${ago < 1 ? 'just now' : ago < 60 ? ago + ' min ago' : ago < 1440 ? Math.round(ago / 60) + ' h ago' : Math.round(ago / 1440) + ' days ago'})`, 3); return true;
 }
 function newGame() { resetProperties();
   if (player.car) exitCar(true); endMission();
@@ -1577,10 +1585,10 @@ addEventListener('visibilitychange', () => { if (document.hidden && state.starte
 // ---------- boot ----------
 function begin(cont) {
   audio.unlock(); audio.setVolume(settings.volume); audio.startAmbience();
-  if (!(cont && loadGame())) newGame();
+  const loaded = cont && loadGame(); if (!loaded) newGame();
   $('start').classList.add('hidden'); $('hud').classList.remove('hidden');
   state.started = true; state.paused = false; last = performance.now();
-  state.camYaw = Math.PI; showMsg('Yellow markers start missions. Tap ❚❚ for controls.', 4);
+  state.camYaw = Math.PI; if (!loaded) showMsg('Yellow markers start missions. Tap ❚❚ for controls.', 4);
 }
 $('btnNew').addEventListener('click', () => begin(false));
 $('btnContinue').addEventListener('click', () => begin(true));
