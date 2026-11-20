@@ -9,6 +9,7 @@
 //   minimap: PROPERTIES.forEach(p => dot(p.x, p.z, p.owned ? '#3ddc84' : '#ffcf3c', 7, '🏠'))   // or any glyph
 //   markers: M.makeMarker(...) at each p.x, p.z (green when owned, yellow when for sale)
 //   New Game: resetProperties();
+//   save/load (plain JSON): getPropertyState() / setPropertyState(obj)
 // Positions are approximate city centres; nudge x/z to a sidewalk spot if one lands inside a building.
 const KEY = 'vicebay_properties_v1';
 export const PROPERTIES = [
@@ -41,6 +42,20 @@ export function resolveProperties(POI, scale = 1, overrides = {}) {
 }
 export function resetProperties() { for (const p of PROPERTIES) { p.owned = false; p.safe = 0; p._t = 0; } save(); }
 export function ownedCount() { return PROPERTIES.filter(p => p.owned).length; }
+export function getPropertyState() {
+  const s = {};
+  for (const p of PROPERTIES) s[p.id] = { owned: !!p.owned, safe: Math.floor(p.safe || 0), t: p._t || 0 };
+  return s;
+}
+export function setPropertyState(obj) {
+  if (!obj || typeof obj !== 'object') return getPropertyState();
+  for (const p of PROPERTIES) {
+    const r = obj[p.id]; if (!r) continue;
+    p.owned = !!r.owned; p.safe = r.safe || 0; p._t = r.t || 0;
+  }
+  save();
+  return getPropertyState();
+}
 
 let saveT = 0;
 export function tickIncome(dt) {

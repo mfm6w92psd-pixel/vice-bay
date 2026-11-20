@@ -19,6 +19,7 @@ import { buildExpressway } from './assets/expressway.js';
 import { VERSION, openVersionHistory } from './assets/changelog.js';
 import { buildStuntJumps, STUNT_SPOTS } from './assets/stunts.js';
 import { openShop } from './assets/shop.js';
+import { initStyle, sprintMultiplier, getStyleState, setStyleState, resetStyle } from './assets/style.js';
 import { PROPERTIES, resolveProperties, openProperty, tickIncome, propertyAt, resetProperties } from './assets/properties.js';
 import { makeNPC, pickNPCType, animateNPC, setNPCPanic } from './assets/npcs.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -749,6 +750,7 @@ const player = { mode: 'foot', car: null, x: 0, z: 0, y: 0, vy: 0, heading: 0, h
 scene.add(player.mesh);
 const state = { wanted: 0, unseen: 0, spawnT: 0, bustT: 0, time: 0.4, paused: true, started: false, dead: false, heli: null, weather: 0, weatherT: 120, thunderT: 10,
   mission: null, missionCD: 3, done: [], camYaw: Math.PI, camPitch: 0.32, lastCamInput: -10, now: 0, saveCD: 6 };
+const style = initStyle({ scene, player, showMsg, addCol, onOpen: () => { state.shopOpen = true; }, onClose: () => { state.shopOpen = false; }, isBusy: () => !!(state.shopOpen || state.mission) });
 let flash = 0;
 
 function hurt(amt, why) {
@@ -1015,26 +1017,36 @@ function die(text, color) {
 function saveGame(quiet) {
   const px = player.car ? player.car.x : player.x, pz = player.car ? player.car.z : player.z;
   const c = player.car, car = c && (c.kind === 'car' || c.kind === 'sports') && !c.dead ? { sports: !!c.sports, color: c.color, h: c.heading, name: c.name } : null;
-  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ money: player.money, health: player.health, armor: player.armor, done: state.done, x: px, z: pz, time: state.time, weapon: player.weapon, w5: 1, car, at: Date.now() })); } catch (e) { if (quiet !== 'silent') showMsg('Could not save'); return; }
-  $('btnContinue').style.display = '';
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ money: player.money, health: player.health, armor: player.armor, done: state.done, x: px, z: pz, time: state.time, weapon: player.weapon, w5: 1, car, style: getStyleState(), at: Date.now() })); } catch (e) { if (quiet !== 'silent') showMsg('Could not save'); return; }
+  refreshContinue();
   if (quiet === 'silent') return; if (!quiet) showMsg('Game saved'); else showMsg('Progress saved', 1.5);
 }
 // New Bot: autosave every minute and whenever Safari hides or closes the tab (skipped during missions, chases and wasted/busted)
 function autoSave() { if (state.started && !state.mission && !state.wanted && !state.dead) saveGame('silent'); }
 setInterval(() => { if (!state.paused) autoSave(); }, 60000);
 addEventListener('pagehide', autoSave); addEventListener('visibilitychange', () => { if (document.hidden) autoSave(); });
+function readSave() { try { const s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); return s && typeof s === 'object' && Number.isFinite(s.x) && Number.isFinite(s.z) ? s : null; } catch (e) { return null; } }
+function agoText(at) { if (!at) return ''; const a = Math.round((Date.now() - at) / 60000); return a < 1 ? 'just now' : a < 60 ? a + ' min ago' : a < 1440 ? Math.round(a / 60) + ' h ago' : Math.round(a / 1440) + ' days ago'; }
+function refreshContinue() { const s = readSave(), b = $('btnContinue'); b.style.display = s ? '' : 'none'; if (s) b.textContent = s.at ? `Continue (saved ${agoText(s.at)})` : 'Continue'; }
 function loadGame() {
-  const s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); if (!s) { showMsg('No saved game yet'); return false; }
+  const s = readSave(); if (!s) { showMsg('No saved game yet'); return false; }
   if (player.car) exitCar(true); endMission();
-  Object.assign(player, { money: s.money, health: s.health, armor: s.armor, weapon: s.weapon ?? 1, x: s.x, z: s.z, y: 0 });
+  Object.assign(player, { money: Number.isFinite(s.money) ? s.money : 0, health: Number.isFinite(s.health) ? s.health : 100, armor: Number.isFinite(s.armor) ? s.armor : 0, weapon: s.weapon ?? 1, x: s.x, z: s.z, y: 0 });
   if (!s.w5) [player.x, player.z] = wp(s.x, s.z);
   if (insideAny(player.x, player.z, 0.5)) { player.x = POI.safe.x; player.z = POI.safe.z; }
   state.done = s.done || []; state.time = s.time ?? 0.4; state.wanted = 0; vehicles.filter(v => v.type === 'police').forEach(removeVehicle);
-  if (s.car && !insideAny(player.x, player.z, 2.5)) { const v = addVehicle('parked', player.x, player.z, s.car.h || 0, { sports: s.car.sports, color: s.car.color, name: s.car.name }); player.x += 1; enterCar(); if (player.car !== v) { v.type = 'parked'; } }
-  const ago = s.at ? Math.round((Date.now() - s.at) / 60000) : null;
-  refreshMissionMarkers(); showMsg(ago == null ? 'Game loaded' : `Game loaded (saved ${ago < 1 ? 'just now' : ago < 60 ? ago + ' min ago' : ago < 1440 ? Math.round(ago / 60) + ' h ago' : Math.round(ago / 1440) + ' days ago'})`, 3); return true;
+  if (s.car) { // find the nearest clear spot (spiral) and put the player straight into the car
+    let cx = s.x, cz = s.z; if (!s.w5) [cx, cz] = wp(s.x, s.z);
+    outer: for (let r = 0; r <= 24; r += 2) for (let a = 0; a < (r ? 12 : 1); a++) { const tx = cx + Math.cos(a / 12 * Math.PI * 2) * r, tz = cz + Math.sin(a / 12 * Math.PI * 2) * r; if (!insideAny(tx, tz, 2.2)) { cx = tx; cz = tz; break outer; } if (r === 24 && a === 11) cx = null; }
+    if (cx != null) { const v = addVehicle('parked', cx, cz, Number.isFinite(s.car.h) ? s.car.h : 0, { sports: s.car.sports, color: s.car.color, name: s.car.name });
+      v.type = 'player'; v.plan = null; player.car = v; player.mode = 'car'; player.mesh.visible = false; player.x = cx; player.z = cz;
+      audio.startEngine(); audio.station = settings.station || 0; if (settings.radio) audio.startRadio(); }
+  }
+  if (s.style) setStyleState(s.style);
+  const ago = agoText(s.at);
+  refreshMissionMarkers(); showMsg(ago ? `Game loaded (saved ${ago})` : 'Game loaded', 3); return true;
 }
-function newGame() { resetProperties();
+function newGame() { resetProperties(); resetStyle();
   if (player.car) exitCar(true); endMission();
   Object.assign(player, { money: 500, health: 100, armor: 0, weapon: 1, x: POI.safe.x + 6, z: POI.safe.z - 4, y: 0 }); state.saveCD = 6;
   state.done = []; state.time = 0.4; state.wanted = 0; vehicles.filter(v => v.type === 'police').forEach(removeVehicle);
@@ -1116,7 +1128,7 @@ function updateFoot(dt) {
   let mx = f[0] * input.my + r[0] * input.mx, mz = f[1] * input.my + r[1] * input.mx; const ml = Math.hypot(mx, mz);
   player.swim = inWater(player.x, player.z) && (player.x > SHORE + 4 || player.y < 0.5) && !(player.x > port.waterRect.minX - 1 && player.x < port.waterRect.minX + 2 && player.y >= 0);
   const pox = player.x, poz = player.z;
-  const spd = (player.swim ? 2.5 : input.sprint ? 8 : 4.2) * Math.min(1, ml); player.spd = spd;
+  const spd = (player.swim ? 2.5 : input.sprint ? 8 * sprintMultiplier() : 4.2) * Math.min(1, ml); player.spd = spd;
   if (ml > 0.05) { mx /= ml; mz /= ml; player.heading += wrapA(headingOf(mx, mz) - player.heading) * Math.min(1, dt * 12); }
   const nx = player.x + mx * spd * dt, nz = player.z + mz * spd * dt;
   player.x = nx; player.z = nz;
@@ -1451,7 +1463,7 @@ function updateInteractions(dt) {
     }
   }
   // POIs
-  tickIncome(dt);
+  tickIncome(dt); style.update(dt);
   if (!player.car && !state.mission && !state.shopOpen) { const pr = propertyAt(px, pz); if (pr) { state.shopOpen = true; openProperty({ property: pr, player, showMsg, onSave: () => saveGame(), onClose: () => { state.shopOpen = false; } }); } }
   for (const pr of PROPERTIES) if (pr._own !== pr.owned) { pr._own = pr.owned; pr.mesh.material.color?.set(pr.owned ? 0x3ddc84 : 0xffcf3c); }
   for (const sh of SHOPS) { const near = !player.car && !state.mission && Math.hypot(sh.x - px, sh.z - pz) < 3; if (near && !sh.in && !state.shopOpen) { state.shopOpen = true; openShop({ player, showMsg, onClose: () => { state.shopOpen = false; } }); } sh.in = near; }
@@ -1592,7 +1604,7 @@ function begin(cont) {
 }
 $('btnNew').addEventListener('click', () => begin(false));
 $('btnContinue').addEventListener('click', () => begin(true));
-if (!localStorage.getItem(SAVE_KEY)) $('btnContinue').style.display = 'none';
+refreshContinue(); setInterval(() => { if (!state.started) refreshContinue(); }, 30000);
 for (let i = 0; i < 14; i++) spawnPickup();
 for (let i = 0; i < 16; i++) spawnTraffic(null);
 for (let i = 0; i < 24; i++) spawnPed();

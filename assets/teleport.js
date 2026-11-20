@@ -11,6 +11,12 @@
 //     buttonStyle: 'top:60px;left:12px'                            // optional CSS to reposition it
 //   });
 //   tp.open() / tp.close() / tp.isOpen()
+// Extra places are merged in when the menu opens, so game.js does not need a new hookup:
+//   Mount Kestrel — pre-warp peak in stunts.js is (-1050, -1350); after the 5x world warp
+//   the peak is at (-2050, -3550). Teleport lands at the foot of the summit road
+//   (a0=0, R0=930) at (-1120, -3550), a flat start, not the summit.
+import { STYLE_PLACES } from './style.js';
+export const MOUNT_KESTREL_PLACE = { name: 'Mount Kestrel', x: -1120, z: -3550, icon: '⛰️' };
 const css = `
 #tpUI{position:fixed;inset:0;z-index:9998;background:rgba(8,10,25,.9);color:#fff;font-family:system-ui,-apple-system,sans-serif;display:flex;flex-direction:column;
   padding:max(14px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) 14px max(14px,env(safe-area-inset-left));}
@@ -62,7 +68,10 @@ export function buildTeleport({ places = [], teleport, getOwned = () => [], getP
     o = document.createElement('div'); o.id = 'tpUI';
     o.innerHTML = `<div class="hd"><div class="tt">🌀 <b>TELEPORT</b></div><button class="x">✕</button></div><div class="body"></div>`;
     const body = o.querySelector('.body');
-    body.appendChild(section('Places', places, 'No places yet'));
+    const extra = [MOUNT_KESTREL_PLACE, ...(STYLE_PLACES || [])];
+    const list = places.slice();
+    for (const e of extra) if (e && !list.some(p => p.name === e.name)) list.push({ name: e.name, x: e.x, z: e.z, icon: e.icon || '📍' });
+    body.appendChild(section('Places', list, 'No places yet'));
     body.appendChild(section('My properties', getOwned() || [], 'Buy a property to teleport to it'));
     tap(o.querySelector('.x'), close);
     body.addEventListener('touchmove', e => e.stopPropagation(), { passive: true });
